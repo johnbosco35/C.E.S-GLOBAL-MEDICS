@@ -1,74 +1,167 @@
-
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
-import { Save, User, Settings as SettingsIcon, Shield, CreditCard } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { Save, User, Settings as SettingsIcon, CreditCard } from "lucide-react";
+import {
+  getAdminSetting,
+  updateBankDetails,
+  updateStoreDetails,
+} from "@/Api/AdminSetting";
+import { getAdminInfo, updateAdminEmail } from "@/Api/AdminAuth";
+import { Eye, EyeOff, Pencil } from "lucide-react";
 
 const AdminSettings = () => {
   const [adminInfo, setAdminInfo] = useState({
-    name: 'Admin User',
-    email: 'admin@example.com',
-    phone: '+234 801 234 5678',
-    role: 'Super Admin',
+    name: "",
+    email: "",
+    phone: "",
+    role: "Super Admin",
   });
+  const [isEmailEditable, setIsEmailEditable] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState(""); // For confirming identity
+  const [isLoading, setIsLoading] = useState(false);
 
   const [storeInfo, setStoreInfo] = useState({
-    storeName: 'Medical Equipment Store',
-    storeDescription: 'Your trusted partner for quality medical equipment and laboratory supplies.',
-    storeAddress: '123 Medical Plaza, Victoria Island, Lagos, Nigeria',
-    storePhone: '+234 800 123 4567',
-    storeEmail: 'info@medicalstore.com',
+    storeName: "",
+    storeDescription: "",
+    storeAddress: "",
+    storePhone: "",
+    storeEmail: "",
   });
 
   const [paymentInfo, setPaymentInfo] = useState({
-    bankName: 'First Bank Nigeria',
-    accountName: 'Medical Equipment Store',
-    accountNumber: '1234567890',
-    sortCode: '011',
+    bankName: "",
+    accountName: "",
+    accountNumber: "",
+    sortCode: "",
   });
 
-  const [buyersStats, setBuyersStats] = useState({
-    totalBuyers: 2345,
-    activeBuyers: 1890,
-    newBuyersThisMonth: 156,
-  });
+  const [isPaymentEditable, setIsPaymentEditable] = useState(false);
+  const [isStoreEditable, setIsStoreEditable] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // Load payment info from localStorage
-    const savedPaymentInfo = localStorage.getItem('adminPaymentInfo');
-    if (savedPaymentInfo) {
-      setPaymentInfo(JSON.parse(savedPaymentInfo));
-    }
+    const fetchSettings = async () => {
+      try {
+        const [settingsRes, adminRes] = await Promise.all([
+          getAdminSetting(),
+          getAdminInfo(),
+        ]);
+
+        const data = settingsRes?.data || settingsRes.settings;
+        const admin = adminRes?.user;
+
+        if (data?.storeInfo) {
+          setStoreInfo({
+            storeName: data.storeInfo.name || "",
+            storeEmail: data.storeInfo.email || "",
+            storePhone: data.storeInfo.phone || "",
+            storeAddress: data.storeInfo.address || "",
+            storeDescription: data.storeInfo.description || "",
+          });
+        }
+
+        if (data?.bankInfo) {
+          setPaymentInfo({
+            bankName: data.bankInfo.bankName || "",
+            accountNumber: data.bankInfo.accountNumber || "",
+            accountName: data.bankInfo.accountName || "",
+            sortCode: "",
+          });
+        }
+
+        if (admin) {
+          setAdminInfo({
+            name: admin.name || "", // not provided in API
+            email: admin.email || "",
+            phone: admin.phoneNumber || "",
+            role: "Super Admin",
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch admin or settings:", error);
+      }
+    };
+
+    fetchSettings();
   }, []);
 
   const handleAdminInfoChange = (field: string, value: string) => {
-    setAdminInfo(prev => ({ ...prev, [field]: value }));
+    setAdminInfo((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleStoreInfoChange = (field: string, value: string) => {
-    setStoreInfo(prev => ({ ...prev, [field]: value }));
+    setStoreInfo((prev) => ({ ...prev, [field]: value }));
   };
 
   const handlePaymentInfoChange = (field: string, value: string) => {
-    setPaymentInfo(prev => ({ ...prev, [field]: value }));
+    setPaymentInfo((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSaveSettings = () => {
-    // Save to localStorage
-    localStorage.setItem('adminPaymentInfo', JSON.stringify(paymentInfo));
-    console.log('Saving admin settings:', { adminInfo, storeInfo, paymentInfo });
-    alert('Settings saved successfully!');
+  const handleSaveSettings = async () => {
+    try {
+      setIsLoading(true);
+      localStorage.setItem("adminInfo", JSON.stringify(adminInfo));
+      localStorage.setItem("storeInfo", JSON.stringify(storeInfo));
+      localStorage.setItem("paymentInfo", JSON.stringify(paymentInfo));
+
+      if (isEmailEditable) {
+        if (!currentPassword) {
+          alert("Please enter your current password to update email.");
+          return;
+        }
+      }
+
+      // Update Email
+      if (isEmailEditable && currentPassword) {
+        await updateAdminEmail({
+          email: adminInfo.email,
+          password: currentPassword,
+        });
+        setIsEmailEditable(false);
+        setCurrentPassword("");
+      }
+
+      // Update store details
+      if (isStoreEditable) {
+        await updateStoreDetails(storeInfo);
+        setIsStoreEditable(false);
+      }
+
+      // Update payment details
+      if (isPaymentEditable) {
+        await updateBankDetails(paymentInfo);
+        setIsPaymentEditable(false);
+      }
+
+      alert("Settings saved successfully!");
+      setIsLoading(false);
+    } catch (error) {
+      setIsLoading(false);
+      console.error("Update failed:", error.response?.data || error.message);
+      alert(
+        `Failed to save settings: ${
+          error.response?.data?.message || error.message
+        }`
+      );
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        Settings
+      </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Admin Information */}
@@ -88,24 +181,64 @@ const AdminSettings = () => {
               <Input
                 id="adminName"
                 value={adminInfo.name}
-                onChange={(e) => handleAdminInfoChange('name', e.target.value)}
+                disabled={true} // Admin name is not editable
+                onChange={(e) => handleAdminInfoChange("name", e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="adminEmail">Email</Label>
+            <div className="relative">
+              <Label
+                htmlFor="adminEmail"
+                className="flex justify-between items-center"
+              >
+                Email
+                <button
+                  type="button"
+                  className="ml-2 text-blue-500 hover:text-blue-700"
+                  onClick={() => setIsEmailEditable(!isEmailEditable)}
+                >
+                  <Pencil className="w-4 h-4 mb-2" />
+                </button>
+              </Label>
               <Input
                 id="adminEmail"
                 type="email"
                 value={adminInfo.email}
-                onChange={(e) => handleAdminInfoChange('email', e.target.value)}
+                disabled={!isEmailEditable}
+                onChange={(e) => handleAdminInfoChange("email", e.target.value)}
               />
             </div>
+
+            {isEmailEditable && (
+              <div className="relative mt-4">
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <Input
+                  id="currentPassword"
+                  type={showPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-9 text-gray-500 hover:text-gray-700"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            )}
+
             <div>
-              <Label htmlFor="adminPhone">Phone</Label>
+              <Label htmlFor="adminPhone">Phone Number</Label>
               <Input
                 id="adminPhone"
+                type="tel"
                 value={adminInfo.phone}
-                onChange={(e) => handleAdminInfoChange('phone', e.target.value)}
+                disabled={true} // Phone number is not editable
+                onChange={(e) => handleAdminInfoChange("phone", e.target.value)}
               />
             </div>
             <div>
@@ -132,48 +265,53 @@ const AdminSettings = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="storeName">Store Name</Label>
-              <Input
-                id="storeName"
-                value={storeInfo.storeName}
-                onChange={(e) => handleStoreInfoChange('storeName', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="storeEmail">Store Email</Label>
-              <Input
-                id="storeEmail"
-                type="email"
-                value={storeInfo.storeEmail}
-                onChange={(e) => handleStoreInfoChange('storeEmail', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="storePhone">Store Phone</Label>
-              <Input
-                id="storePhone"
-                value={storeInfo.storePhone}
-                onChange={(e) => handleStoreInfoChange('storePhone', e.target.value)}
-              />
-            </div>
+            {[
+              ["storeName", "Store Name"],
+              ["storeEmail", "Store Email"],
+              ["storePhone", "Store Phone"],
+            ].map(([field, label]) => (
+              <div key={field}>
+                <Label htmlFor={field}>{label}</Label>
+                <Input
+                  id={field}
+                  value={storeInfo[field as keyof typeof storeInfo]}
+                  disabled={!isStoreEditable}
+                  onChange={(e) => handleStoreInfoChange(field, e.target.value)}
+                />
+              </div>
+            ))}
             <div>
               <Label htmlFor="storeDescription">Description</Label>
               <Textarea
                 id="storeDescription"
-                value={storeInfo.storeDescription}
-                onChange={(e) => handleStoreInfoChange('storeDescription', e.target.value)}
                 rows={2}
+                value={storeInfo.storeDescription}
+                onChange={(e) =>
+                  handleStoreInfoChange("storeDescription", e.target.value)
+                }
+                disabled={!isStoreEditable}
               />
             </div>
             <div>
               <Label htmlFor="storeAddress">Address</Label>
               <Textarea
                 id="storeAddress"
-                value={storeInfo.storeAddress}
-                onChange={(e) => handleStoreInfoChange('storeAddress', e.target.value)}
                 rows={2}
+                value={storeInfo.storeAddress}
+                onChange={(e) =>
+                  handleStoreInfoChange("storeAddress", e.target.value)
+                }
+                disabled={!isStoreEditable}
               />
+            </div>
+            <div className="flex justify-end pr-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsStoreEditable(!isStoreEditable)}
+              >
+                Edit Store Info
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -190,72 +328,32 @@ const AdminSettings = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="bankName">Bank Name</Label>
-              <Input
-                id="bankName"
-                value={paymentInfo.bankName}
-                onChange={(e) => handlePaymentInfoChange('bankName', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="accountName">Account Name</Label>
-              <Input
-                id="accountName"
-                value={paymentInfo.accountName}
-                onChange={(e) => handlePaymentInfoChange('accountName', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="accountNumber">Account Number</Label>
-              <Input
-                id="accountNumber"
-                value={paymentInfo.accountNumber}
-                onChange={(e) => handlePaymentInfoChange('accountNumber', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="sortCode">Sort Code</Label>
-              <Input
-                id="sortCode"
-                value={paymentInfo.sortCode}
-                onChange={(e) => handlePaymentInfoChange('sortCode', e.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Buyers Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5" />
-              Buyers Overview
-            </CardTitle>
-            <CardDescription>
-              Summary of buyer statistics and management
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {buyersStats.totalBuyers.toLocaleString()}
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Total Buyers</div>
+            {[
+              ["bankName", "Bank Name"],
+              ["accountName", "Account Name"],
+              ["accountNumber", "Account Number"],
+              ["sortCode", "Sort Code"],
+            ].map(([field, label]) => (
+              <div key={field}>
+                <Label htmlFor={field}>{label}</Label>
+                <Input
+                  id={field}
+                  value={paymentInfo[field as keyof typeof paymentInfo]}
+                  onChange={(e) =>
+                    handlePaymentInfoChange(field, e.target.value)
+                  }
+                  disabled={!isPaymentEditable}
+                />
               </div>
-              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {buyersStats.activeBuyers.toLocaleString()}
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Active Buyers</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  {buyersStats.newBuyersThisMonth.toLocaleString()}
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">New This Month</div>
-              </div>
+            ))}
+            <div className="flex justify-end pr-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPaymentEditable(!isPaymentEditable)}
+              >
+                Edit Payment Info
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -264,9 +362,21 @@ const AdminSettings = () => {
       <Separator />
 
       <div className="flex justify-end">
-        <Button onClick={handleSaveSettings} className="flex items-center gap-2">
-          <Save className="w-4 h-4" />
-          Save All Settings
+        <Button
+          onClick={handleSaveSettings}
+          className="flex items-center gap-2"
+        >
+          {isLoading ? (
+            <span>
+              <Save className="w-4 h-4 animate-spin" />
+              Saving...
+            </span>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              Save Settings
+            </>
+          )}
         </Button>
       </div>
     </div>

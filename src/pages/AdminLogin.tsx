@@ -1,8 +1,12 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, Loader } from "lucide-react";
+import { adminLogin } from "@/Api/AdminAuth";
+import { useDispatch } from "react-redux";
+import { setAdmin } from "@/redux/slices/adminSlices";
 
 const AdminLogin = () => {
+  const [lpading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -10,41 +14,90 @@ const AdminLogin = () => {
   });
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    // Get admin accounts from localStorage
-    const adminAccounts = JSON.parse(
-      localStorage.getItem("adminAccounts") || "[]"
-    );
+    const { email, password } = formData;
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
 
-    // Check if admin exists and password matches
-    const admin = adminAccounts.find(
-      (account: any) =>
-        account.email === formData.email &&
-        account.password === formData.password
-    );
+    setLoading(true);
 
-    if (admin) {
-      // Store admin session
-      localStorage.setItem(
-        "adminSession",
-        JSON.stringify({
-          id: admin.id,
-          email: admin.email,
-          name: admin.name,
-          loginTime: new Date().toISOString(),
-        })
+    try {
+      const res = await adminLogin(email, password); // Make sure res.user exists!
+
+      if (res?.user) {
+        dispatch(setAdmin(res.user)); // store globally
+
+        // Store session locally
+        localStorage.setItem(
+          "adminSession",
+          JSON.stringify({
+            id: res.user._id || res.user.id,
+            email: res.user.email,
+            name: res.user.fullName || res.user.name,
+            loginTime: new Date().toISOString(),
+          })
+        );
+
+        console.log("Stored session:", localStorage.getItem("adminSession"));
+
+        console.log("Admin session saved:", res.user);
+        setTimeout(() => {
+          navigate("/admin");
+        }, 0);
+      } else {
+        setError(res?.response?.data?.message || "Login failed");
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      setError(
+        error?.response?.data?.message || "Something went wrong. Try again."
       );
-
-      console.log("Admin login successful:", admin.email);
-      navigate("/admin");
-    } else {
-      setError("Invalid email or password");
+    } finally {
+      setLoading(false);
     }
   };
+
+  // const handleSubmit = (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setError("");
+
+  //   // Get admin accounts from localStorage
+  //   const adminAccounts = JSON.parse(
+  //     localStorage.getItem("adminAccounts") || "[]"
+  //   );
+
+  //   // Check if admin exists and password matches
+  //   const admin = adminAccounts.find(
+  //     (account: any) =>
+  //       account.email === formData.email &&
+  //       account.password === formData.password
+  //   );
+
+  //   if (admin) {
+  //     // Store admin session
+  //     localStorage.setItem(
+  //       "adminSession",
+  //       JSON.stringify({
+  //         id: admin.id,
+  //         email: admin.email,
+  //         name: admin.name,
+  //         loginTime: new Date().toISOString(),
+  //       })
+  //     );
+
+  //     console.log("Admin login successful:", admin.email);
+  //     navigate("/admin");
+  //   } else {
+  //     setError("Invalid email or password");
+  //   }
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -84,7 +137,7 @@ const AdminLogin = () => {
                     setFormData({ ...formData, email: e.target.value })
                   }
                   required
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Enter admin email"
                 />
               </div>
@@ -107,7 +160,7 @@ const AdminLogin = () => {
                     setFormData({ ...formData, password: e.target.value })
                   }
                   required
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Enter admin password"
                 />
                 <button
@@ -128,7 +181,14 @@ const AdminLogin = () => {
               type="submit"
               className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
             >
-              Sign In as Admin
+              {lpading ? (
+                <span className="flex items-center justify-center">
+                  <Loader className="animate-spin mr-2" />
+                  Logging in...
+                </span>
+              ) : (
+                "Login"
+              )}
             </button>
           </form>
 
