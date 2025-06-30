@@ -1,34 +1,55 @@
+import React, { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Edit, Trash2, ImageIcon } from "lucide-react";
+import { motion } from "framer-motion";
 
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Edit, Trash2, ImageIcon } from 'lucide-react';
-
-interface Product {
-  id: number;
+interface Brand {
   name: string;
-  category: string;
-  price: number;
+  price: string;
   stock: number;
-  status: string;
-  description?: string;
-  images?: string[];
 }
 
-interface ProductDetailModalProps {
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  brands: Brand[];
+  description?: string;
+  // images: string[];
+  images: (string | File)[];
+}
+
+interface Props {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (product: Product) => void;
-  onDelete: (productId: number) => void;
+  onDelete: (productId: string) => void;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
+const ProductDetailModal: React.FC<Props> = ({
   product,
   isOpen,
   onClose,
@@ -38,40 +59,38 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedProduct, setEditedProduct] = useState<Product | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (product) {
+      const deep = JSON.parse(JSON.stringify(product));
       setEditedProduct({
-        ...product,
-        description: product.description || 'No description available for this product.'
+        ...deep,
+        description:
+          product.description || "No description available for this product.",
       });
     }
     setIsEditing(false);
   }, [product]);
 
-  const handleSave = () => {
-    if (editedProduct) {
-      onUpdate(editedProduct);
-      setIsEditing(false);
-    }
-  };
-
-  const handleDelete = () => {
-    if (product) {
-      onDelete(product.id);
-      onClose();
-    }
-  };
-
-  const handleInputChange = (field: keyof Product, value: string | number) => {
-    if (editedProduct) {
-      setEditedProduct({
-        ...editedProduct,
-        [field]: value,
-      });
-    }
-  };
-
   if (!product || !editedProduct) return null;
+
+  const totalStock = editedProduct.brands.reduce((sum, b) => sum + b.stock, 0);
+  const status = totalStock > 0 ? "Active" : "Out of Stock";
+
+  const handleInputChange = (
+    field: keyof Omit<Product, "brands" | "images" | "id">,
+    value: string
+  ) => {
+    setEditedProduct((prev) => prev && { ...prev, [field]: value });
+  };
+
+  const updateBrandField = (idx: number, field: keyof Brand, value: string) => {
+    const updated = editedProduct.brands.map((b, i) =>
+      i === idx
+        ? { ...b, [field]: field === "stock" ? parseInt(value) || 0 : value }
+        : b
+    );
+    setEditedProduct({ ...editedProduct, brands: updated });
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -86,7 +105,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 onClick={() => setIsEditing(!isEditing)}
               >
                 <Edit className="w-4 h-4 mr-2" />
-                {isEditing ? 'Cancel' : 'Edit'}
+                {isEditing ? "Cancel" : "Edit"}
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -99,132 +118,160 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Product</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to delete "{product.name}"? This action cannot be undone.
+                      Are you sure you want to delete "{product.name}"?
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                    <AlertDialogAction onClick={() => onDelete(product.id)}>
+                      Delete
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
           </DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? "You can edit the product details below."
+              : "View and manage the product details."}
+          </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-6">
-          {/* Product Images */}
-          {editedProduct.images && editedProduct.images.length > 0 && (
-            <div>
-              <Label className="text-base font-semibold">Product Images</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
-                {editedProduct.images.map((image, index) => (
-                  <div key={index} className="relative">
-                    <img
-                      src={image}
-                      alt={`Product image ${index + 1}`}
-                      className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
-                    />
-                  </div>
-                ))}
+          {/* Images section */}
+          <div>
+            <Label className="font-semibold">Product Images</Label>
+            {editedProduct.images.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {editedProduct.images.map((img, i) => {
+                  const src =
+                    typeof img === "string" ? img : URL.createObjectURL(img);
+                  return (
+                    <div key={i} className="relative">
+                      <img
+                        src={src}
+                        className="w-full h-32 object-cover rounded-lg border"
+                      />
+                      {isEditing && (
+                        <button
+                          className="absolute top-1 right-1 bg-red-600 text-white px-2 rounded"
+                          onClick={() => {
+                            const copy = [...editedProduct.images];
+                            copy.splice(i, 1);
+                            setEditedProduct({
+                              ...editedProduct,
+                              images: copy,
+                            });
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-          )}
-
-          {/* No Images Placeholder */}
-          {(!editedProduct.images || editedProduct.images.length === 0) && (
-            <div className="flex items-center justify-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-              <div className="text-center">
-                <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">No images available for this product</p>
+            ) : (
+              <p>No images available</p>
+            )}
+            {isEditing && (
+              <div className="mt-2">
+                <Label>Add Images</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    // const files = Array.from(e.target.files || []);
+                    setEditedProduct({
+                      ...editedProduct,
+                      images: [
+                        ...editedProduct.images,
+                        ...(e.target.files || []),
+                      ],
+                    });
+                  }}
+                />
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
+          {/* Core fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="productId">Product ID</Label>
-              <Input
-                id="productId"
-                value={`#${product.id}`}
-                disabled
-                className="bg-gray-100 dark:bg-gray-800"
-              />
+              <Label>Product ID</Label>
+              <Input disabled value={`#${product.id}`} />
             </div>
             <div>
-              <Label htmlFor="status">Status</Label>
-              {isEditing ? (
-                <Select
-                  value={editedProduct.status}
-                  onValueChange={(value) => handleInputChange('status', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Draft">Draft</SelectItem>
-                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                    <SelectItem value="Discontinued">Discontinued</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input value={editedProduct.status} disabled />
-              )}
+              <Label>Status</Label>
+              <Input disabled value={status} />
             </div>
           </div>
 
           <div>
-            <Label htmlFor="name">Product Name</Label>
+            <Label>Name</Label>
             <Input
-              id="name"
+              disabled={!isEditing}
               value={editedProduct.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              disabled={!isEditing}
+              onChange={(e) => handleInputChange("name", e.target.value)}
             />
           </div>
 
           <div>
-            <Label htmlFor="category">Category</Label>
-            <Input
-              id="category"
+            <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Category *
+            </Label>
+            <motion.select
+              disabled={!isEditing}
               value={editedProduct.category}
-              onChange={(e) => handleInputChange('category', e.target.value)}
-              disabled={!isEditing}
-            />
+              onChange={(e) => handleInputChange("category", e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select Category</option>
+              <option value="Medical Equipment">Medical Equipment</option>
+              <option value="Laboratory Kits">Laboratory Kits</option>
+              <option value="Reagents">Reagents</option>
+              <option value="Disposables">Disposables</option>
+            </motion.select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="price">Price (₦)</Label>
-              <Input
-                id="price"
-                type="number"
-                value={editedProduct.price}
-                onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
-                disabled={!isEditing}
-              />
-            </div>
-            <div>
-              <Label htmlFor="stock">Stock</Label>
-              <Input
-                id="stock"
-                type="number"
-                value={editedProduct.stock}
-                onChange={(e) => handleInputChange('stock', parseInt(e.target.value) || 0)}
-                disabled={!isEditing}
-              />
-            </div>
+          {/* Brands */}
+          <div className="space-y-4">
+            <Label className="font-semibold">Brands</Label>
+            {editedProduct.brands.map((b, i) => (
+              <div key={i} className="grid grid-cols-3 gap-4">
+                <Input
+                  disabled={!isEditing}
+                  value={b.name}
+                  placeholder="Brand name"
+                  onChange={(e) => updateBrandField(i, "name", e.target.value)}
+                />
+                <Input
+                  disabled={!isEditing}
+                  value={b.price}
+                  type="number"
+                  placeholder="Price"
+                  onChange={(e) => updateBrandField(i, "price", e.target.value)}
+                />
+                <Input
+                  disabled={!isEditing}
+                  value={b.stock.toString()}
+                  type="number"
+                  placeholder="Stock"
+                  onChange={(e) => updateBrandField(i, "stock", e.target.value)}
+                />
+              </div>
+            ))}
           </div>
 
           <div>
-            <Label htmlFor="description">Description</Label>
+            <Label>Description</Label>
             <Textarea
-              id="description"
-              value={editedProduct.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
               disabled={!isEditing}
+              value={editedProduct.description}
               rows={4}
+              onChange={(e) => handleInputChange("description", e.target.value)}
             />
           </div>
         </div>
@@ -234,7 +281,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <Button variant="outline" onClick={() => setIsEditing(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>
+            <Button onClick={() => onUpdate(editedProduct)}>
               Save Changes
             </Button>
           </DialogFooter>

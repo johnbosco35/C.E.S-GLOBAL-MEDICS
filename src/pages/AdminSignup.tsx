@@ -8,62 +8,122 @@ import {
   User,
   ShieldCheck,
   PhoneCall,
+  Loader,
 } from "lucide-react";
+import { adminRegister } from "@/Api/AdminAuth";
+
+type FormData = {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  password: string;
+  confirmPassword: string;
+};
 
 const AdminSignup = () => {
+  // State variables
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
+  const [formData, setFormData] = useState<FormData>({
+    fullName: "",
     email: "",
     phoneNumber: "",
     password: "",
     confirmPassword: "",
   });
   const [error, setError] = useState("");
-  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError("");
+    const { fullName, email, phoneNumber, password, confirmPassword } =
+      formData;
 
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
+    if (!fullName || !email || !phoneNumber) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    // Get existing admin accounts
-    const adminAccounts = JSON.parse(
-      localStorage.getItem("adminAccounts") || "[]"
-    );
-
-    // Check if email already exists
-    const existingAdmin = adminAccounts.find(
-      (account: any) => account.email === formData.email
-    );
-    if (existingAdmin) {
-      setError("Admin account with this email already exists");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Please enter a valid email address");
       return;
     }
 
-    // Create new admin account
-    const newAdmin = {
-      id: Date.now(),
-      name: formData.name,
-      email: formData.email,
-      phoneNumber: formData.phoneNumber,
-      password: formData.password,
-      createdAt: new Date().toISOString(),
-    };
+    setLoading(true);
 
-    // Save to localStorage
-    adminAccounts.push(newAdmin);
-    localStorage.setItem("adminAccounts", JSON.stringify(adminAccounts));
-
-    console.log("Admin account created:", newAdmin.email);
-    navigate("/admin/login");
+    adminRegister({
+      fullName,
+      email,
+      password,
+      confirmPassword,
+      phoneNumber,
+    })
+      .then((response) => {
+        console.log("Admin account created:", response);
+        setLoading(false);
+        setError("");
+        navigate("/admin/login");
+      })
+      .catch((err) => {
+        console.error(
+          "Error creating admin account:",
+          err.response.data.message
+        );
+        err.response.status === 400
+          ? setError(err.response.data.message + " Not Allowed")
+          : setError("Failed to create admin account. Please try again.");
+        setLoading(false);
+      });
   };
+
+  // const handleSubmit = (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setError("");
+
+  //   // Validate passwords match
+  //   if (formData.password !== formData.confirmPassword) {
+  //     setError("Passwords do not match");
+  //     return;
+  //   }
+
+  //   // Get existing admin accounts
+  //   const adminAccounts = JSON.parse(
+  //     localStorage.getItem("adminAccounts") || "[]"
+  //   );
+
+  //   // Check if email already exists
+  //   const existingAdmin = adminAccounts.find(
+  //     (account: any) => account.email === formData.email
+  //   );
+  //   if (existingAdmin) {
+  //     setError("Admin account with this email already exists");
+  //     return;
+  //   }
+
+  //   // Create new admin account
+  //   const newAdmin = {
+  //     id: Date.now(),
+  //     name: formData.name,
+  //     email: formData.email,
+  //     phoneNumber: formData.phoneNumber,
+  //     password: formData.password,
+  //     createdAt: new Date().toISOString(),
+  //   };
+
+  //   // Save to localStorage
+  //   adminAccounts.push(newAdmin);
+  //   localStorage.setItem("adminAccounts", JSON.stringify(adminAccounts));
+
+  //   console.log("Admin account created:", newAdmin.email);
+  //   navigate("/admin/login");
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -85,7 +145,7 @@ const AdminSignup = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label
                 htmlFor="name"
@@ -98,12 +158,11 @@ const AdminSignup = () => {
                 <input
                   id="name"
                   type="text"
-                  value={formData.name}
+                  value={formData.fullName}
                   onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
+                    setFormData({ ...formData, fullName: e.target.value })
                   }
-                  required
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Enter your full name"
                 />
               </div>
@@ -120,13 +179,12 @@ const AdminSignup = () => {
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   id="email"
-                  type="email"
+                  // type="email"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  required
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Enter admin email"
                 />
               </div>
@@ -148,8 +206,7 @@ const AdminSignup = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, phoneNumber: e.target.value })
                   }
-                  required
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Enter your phone number"
                 />
               </div>
@@ -171,8 +228,7 @@ const AdminSignup = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  required
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Create a password"
                 />
                 <button
@@ -208,8 +264,7 @@ const AdminSignup = () => {
                       confirmPassword: e.target.value,
                     })
                   }
-                  required
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                   placeholder="Confirm your password"
                 />
                 <button
@@ -228,9 +283,16 @@ const AdminSignup = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-semibold border-none"
             >
-              Create Admin Account
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  <Loader className="animate-spin mr-2" />
+                  Creating...
+                </span>
+              ) : (
+                "Create Account"
+              )}
             </button>
           </form>
 

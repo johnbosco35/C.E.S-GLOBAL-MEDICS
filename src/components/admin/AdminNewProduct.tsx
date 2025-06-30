@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Upload, X, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { addProduct } from "@/Api/AdminProduct";
 
 const AdminNewProduct = () => {
   const { toast } = useToast();
@@ -9,8 +10,6 @@ const AdminNewProduct = () => {
     name: "",
     category: "",
     description: "",
-    price: "",
-    stock: "",
     brands: [{ name: "", price: "", stock: "" }],
   });
   const [images, setImages] = useState<File[]>([]);
@@ -65,7 +64,7 @@ const AdminNewProduct = () => {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const saveProduct = (status: "draft" | "published") => {
+  const saveProduct = async (status: "draft" | "published") => {
     if (images.length === 0) {
       toast({
         title: "Images required",
@@ -75,57 +74,52 @@ const AdminNewProduct = () => {
       return;
     }
 
-    // Convert images to base64 for storage
-    const imagePromises = images.map((image) => {
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(image);
-      });
+    const form = new FormData();
+
+    // Append all images
+    images.forEach((img) => {
+      form.append("productImages", img);
     });
 
-    Promise.all(imagePromises).then((imageUrls) => {
-      const existingProducts = JSON.parse(
-        localStorage.getItem("products") || "[]"
-      );
-      const newProduct = {
-        id: Date.now(),
-        name: formData.name,
-        category: formData.category,
-        description: formData.description,
-        price: parseFloat(formData.price) || 0,
-        stock: parseInt(formData.stock) || 0,
-        status: status === "draft" ? "Draft" : "Active",
-        brands: formData.brands.filter((brand) => brand.name),
-        images: imageUrls,
-      };
+    form.append("productName", formData.name);
+    form.append("category", formData.category);
+    form.append("description", formData.description);
+    form.append(
+      "brands",
+      JSON.stringify(
+        formData.brands
+          .filter((b) => b.name) // remove empty brands
+          .map((b) => ({
+            name: b.name,
+            price: parseFloat(b.price),
+            stock: parseInt(b.stock),
+          }))
+      )
+    );
 
-      const updatedProducts = [...existingProducts, newProduct];
-      localStorage.setItem("products", JSON.stringify(updatedProducts));
+    try {
+      const res = await addProduct(form);
 
-      if (status === "draft") {
-        toast({
-          title: "Product saved as draft",
-          description: "Your product has been saved as a draft.",
-        });
-      } else {
-        toast({
-          title: "Product published successfully",
-          description: "Your product has been published and is now live.",
-        });
-      }
+      toast({
+        title: "Product Added",
+        description: "Product was successfully added.",
+      });
 
       // Reset form
       setFormData({
         name: "",
         category: "",
         description: "",
-        price: "",
-        stock: "",
         brands: [{ name: "", price: "", stock: "" }],
       });
       setImages([]);
-    });
+    } catch (err: any) {
+      toast({
+        title: "Error adding product",
+        description: err?.response?.data?.message || err.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {

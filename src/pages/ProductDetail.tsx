@@ -1,54 +1,33 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import {
-  ArrowLeft,
-  Star,
-  Plus,
-  Minus,
-  ShoppingCart,
-  Heart,
-} from "lucide-react";
+import { ArrowLeft, Star, Plus, Minus, ShoppingCart } from "lucide-react";
 import { useCart } from "../contexts/CartContext";
 import { useTheme } from "../contexts/ThemeContext";
 import ThemeToggle from "../components/ThemeToggle";
 import { motion } from "framer-motion";
+import { getProductById } from "@/Api/UserProduct";
 
 const ProductDetail = () => {
   const { id } = useParams();
+  const [product, setProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedImage, setSelectedImage] = useState(0);
   const { addToCart, getTotalItems } = useCart();
   const { theme } = useTheme();
 
-  // Mock product data - in real app, fetch based on id
-  const product = {
-    id: Number(id),
-    name: "Digital Blood Pressure Monitor",
-    category: "Diagnostic Equipment",
-    price: 89999.0, // Price in Naira
-    images: [
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=300&fit=crop",
-      "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&h=300&fit=crop",
-      "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=300&fit=crop",
-    ],
-    description:
-      "Professional grade digital blood pressure monitor with large LCD display and memory function.",
-    features: [
-      "Large LCD display",
-      "Memory for 120 readings",
-      "Irregular heartbeat detection",
-      "WHO indicator",
-      "Average mode",
-    ],
-    brands: [
-      { name: "Omron", price: 89999.0, stock: 15 },
-      { name: "Braun", price: 94999.0, stock: 8 },
-      { name: "Beurer", price: 79999.0, stock: 12 },
-    ],
-    rating: 4.5,
-    reviews: 124,
-  };
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const data = await getProductById(id);
+        console.log("Fetched product:", data?.product);
+        setProduct(data?.product);
+      } catch (err) {
+        console.error("Failed to fetch product:", err);
+      }
+    };
+    fetchProduct();
+  }, [id]);
 
   const handleAddToCart = () => {
     if (!selectedBrand) {
@@ -57,22 +36,26 @@ const ProductDetail = () => {
     }
 
     const selectedBrandData = product.brands.find(
-      (b) => b.name === selectedBrand
+      (b: any) => b.name === selectedBrand
     );
     if (!selectedBrandData) return;
 
     for (let i = 0; i < quantity; i++) {
       addToCart({
-        id: product.id,
-        name: product.name,
+        id: product._id,
+        name: product.productName,
         brand: selectedBrand,
         price: selectedBrandData.price,
-        image: product.images[selectedImage],
+        image: product.productImages?.[selectedImage] || "",
       });
     }
 
-    alert(`Added ${quantity} ${product.name} (${selectedBrand}) to cart!`);
+    alert(
+      `Added ${quantity} ${product.productName} (${selectedBrand}) to cart!`
+    );
   };
+
+  if (!product) return null;
 
   return (
     <div
@@ -80,7 +63,6 @@ const ProductDetail = () => {
         theme === "dark" ? "dark bg-gray-900" : "bg-gray-50"
       }`}
     >
-      {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -121,16 +103,16 @@ const ProductDetail = () => {
           {/* Product Images */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <img
-              src={product.images[selectedImage]}
-              alt={product.name}
+              src={product.productImages?.[selectedImage]}
+              alt={product.productName}
               className="w-full h-96 object-cover rounded-lg mb-4"
             />
             <div className="flex space-x-2 overflow-x-auto">
-              {product.images.map((image, index) => (
+              {product.productImages?.map((img: string, index: number) => (
                 <img
                   key={index}
-                  src={image}
-                  alt={`${product.name} ${index + 1}`}
+                  src={img}
+                  alt={`Product ${index}`}
                   className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 ${
                     selectedImage === index
                       ? "border-blue-500"
@@ -146,29 +128,11 @@ const ProductDetail = () => {
           <div className="space-y-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                {product.name}
+                {product.productName}
               </h1>
               <p className="text-lg text-gray-600 dark:text-gray-400 mt-2">
                 {product.category}
               </p>
-
-              <div className="flex items-center mt-4">
-                <div className="flex items-center">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`w-5 h-5 ${
-                        i < Math.floor(product.rating)
-                          ? "text-yellow-400 fill-current"
-                          : "text-gray-300 dark:text-gray-600"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-                  {product.rating} ({product.reviews} reviews)
-                </span>
-              </div>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -176,7 +140,7 @@ const ProductDetail = () => {
                 Select Brand
               </h3>
               <div className="space-y-3">
-                {product.brands.map((brand) => (
+                {product.brands?.map((brand: any) => (
                   <label
                     key={brand.name}
                     className="flex items-center justify-between p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -240,15 +204,6 @@ const ProductDetail = () => {
               </button>
             </div>
 
-            <div className="flex space-x-4">
-              <Link
-                to={`/review/${product.id}`}
-                className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-center"
-              >
-                Write a Review
-              </Link>
-            </div>
-
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold mb-4 dark:text-white">
                 Product Description
@@ -256,17 +211,6 @@ const ProductDetail = () => {
               <p className="text-gray-700 dark:text-gray-300 mb-4">
                 {product.description}
               </p>
-
-              <h4 className="font-semibold mb-2 dark:text-white">
-                Key Features:
-              </h4>
-              <ul className="list-disc pl-5 space-y-1">
-                {product.features.map((feature, index) => (
-                  <li key={index} className="text-gray-700 dark:text-gray-300">
-                    {feature}
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, Loader } from "lucide-react";
 import ProductDetailModal from "./ProductDetailModal";
 import {
   Pagination,
@@ -10,16 +10,34 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { motion } from "framer-motion";
+import {
+  fetchProductsFailure,
+  fetchProductsStart,
+  fetchProductsSuccess,
+  updateProduct as updateProductAction,
+  deleteProduct as deleteProductAction,
+} from "@/redux/slices/productSlices";
+import {
+  deleteProduct,
+  getAllProducts,
+  updateProduct,
+} from "@/Api/AdminProduct";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/redux/store";
+
+interface Brand {
+  name: string;
+  price: string;
+  stock: number;
+}
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
   category: string;
-  price: number;
-  stock: number;
-  status: string;
+  brands: Brand[];
   description?: string;
-  images?: string[];
+  images: string[];
 }
 
 const AdminProducts = () => {
@@ -28,52 +46,51 @@ const AdminProducts = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const dispatch = useDispatch<AppDispatch>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: 1,
-      name: "Digital Stethoscope Pro",
-      category: "Medical Equipment",
-      price: 299.99,
-      stock: 15,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "Blood Glucose Test Kit",
-      category: "Laboratory Kits",
-      price: 89.99,
-      stock: 23,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "PCR Reagent Set",
-      category: "Reagents",
-      price: 159.99,
-      stock: 0,
-      status: "Out of Stock",
-    },
-  ]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    // Load products from localStorage including any new ones created with images
-    const storedProducts = JSON.parse(localStorage.getItem("products") || "[]");
-    if (storedProducts.length > 0) {
-      setProducts(storedProducts);
-    } else {
-      // Save default products to localStorage
-      localStorage.setItem("products", JSON.stringify(products));
-    }
-  }, []);
+    const fetchProducts = async () => {
+      dispatch(fetchProductsStart());
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await getAllProducts();
+        console.log("📦 API Response:", res);
+
+        const fetchedProducts = (res.products || []).map((product: any) => ({
+          id: product._id,
+          name: product.productName,
+          category: product.category,
+          brands: Array.isArray(product.brands) ? product.brands : [],
+          description: product.description,
+          images: product.productImages || [],
+        }));
+        setLoading(false);
+        setProducts(fetchedProducts);
+        dispatch(fetchProductsSuccess(fetchedProducts));
+      } catch (err: any) {
+        setLoading(false);
+        setError(err.message || "Failed to fetch products");
+        console.error("❌ Failed to fetch products:", err);
+        dispatch(
+          fetchProductsFailure(err.message || "Failed to fetch products")
+        );
+      }
+    };
+
+    fetchProducts();
+  }, [currentPage, searchTerm]);
 
   const filteredProducts = products.filter(
     (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchTerm.toLowerCase())
+      product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Calculate pagination
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedProducts = filteredProducts.slice(
@@ -86,18 +103,32 @@ const AdminProducts = () => {
     setIsModalOpen(true);
   };
 
-  const handleUpdateProduct = (updatedProduct: Product) => {
-    const updatedProducts = products.map((p) =>
-      p.id === updatedProduct.id ? updatedProduct : p
-    );
-    setProducts(updatedProducts);
-    localStorage.setItem("products", JSON.stringify(updatedProducts));
+  const handleUpdateProduct = async (p: Product) => {
+    try {
+      const form = new FormData();
+      form.append("name", p.name || "");
+      form.append("category", p.category);
+      form.append("description", p.description || "");
+      form.append("brands", JSON.stringify(p.brands));
+      p.images.forEach((img: any) => {
+        if (img instanceof File) form.append("images", img);
+      });
+      const res = await updateProduct(p.id, form);
+      dispatch(updateProductAction(p));
+      setIsModalOpen(false);
+    } catch (e) {
+      console.error("Update failed:", e.response?.data || e.message);
+      alert("Update failed. " + (e.response?.data?.message || e.message));
+    }
   };
 
-  const handleDeleteProduct = (productId: number) => {
-    const updatedProducts = products.filter((p) => p.id !== productId);
-    setProducts(updatedProducts);
-    localStorage.setItem("products", JSON.stringify(updatedProducts));
+  const handleDeleteProduct = async (productId: string) => {
+    const deleteResult = await deleteProduct(productId);
+    if (deleteResult.error) {
+      console.error("❌ Failed to delete product:", deleteResult.error);
+      return;
+    }
+    dispatch(deleteProductAction(productId));
   };
 
   return (
@@ -142,51 +173,82 @@ const AdminProducts = () => {
               </th>
             </tr>
           </thead>
+
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {paginatedProducts.map((product) => (
-              <tr
-                key={product.id}
-                className="hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    {product.name}
+            {loading ? (
+              <tr>
+                <td colSpan={6}>
+                  <div className="py-4 flex justify-center items-center gap-2 text-gray-500 dark:text-gray-400">
+                    <Loader className="animate-spin w-5 h-5" />
+                    <span>Loading products...</span>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                  {product.category}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                  ₦{product.price.toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                  {product.stock}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      product.status === "Active"
-                        ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
-                        : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100"
-                    }`}
-                  >
-                    {product.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <motion.button
-                    onClick={() => handleViewProduct(product)}
-                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </motion.button>
+              </tr>
+            ) : paginatedProducts.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="text-center px-6 py-4 text-gray-500 dark:text-gray-300"
+                >
+                  No products found.
                 </td>
               </tr>
-            ))}
+            ) : (
+              paginatedProducts.map((product) => {
+                const firstBrand = product.brands?.[0] || {
+                  name: "",
+                  price: "0",
+                  stock: 0,
+                };
+                const price = firstBrand.price;
+                const stock = firstBrand.stock;
+                const status = stock > 0 ? "Active" : "Out of Stock";
+
+                return (
+                  <tr
+                    key={product.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {product.name}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                      {product.category}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                      ₦{Number(price).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                      {stock}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          status === "Active"
+                            ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
+                            : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100"
+                        }`}
+                      >
+                        {status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium">
+                      <motion.button
+                        onClick={() => handleViewProduct(product)}
+                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </motion.button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
             <Pagination>
@@ -235,7 +297,7 @@ const AdminProducts = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleUpdateProduct}
-        onDelete={handleDeleteProduct}
+        onDelete={(id) => handleDeleteProduct(id)}
       />
     </div>
   );

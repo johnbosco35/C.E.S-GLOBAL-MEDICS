@@ -3,10 +3,10 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 interface ProductItem {
   id: string;
   name: string;
-  description: string;
-  price: number;
-  image: string;
   category: string;
+  brands: { name: string; price: string; stock: number }[];
+  description?: string;
+  images: string[];
 }
 
 interface ProductState {
