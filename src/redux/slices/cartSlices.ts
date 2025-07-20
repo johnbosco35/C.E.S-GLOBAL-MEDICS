@@ -6,16 +6,19 @@ interface CartItem {
   price: number;
   quantity: number;
   image: string;
+  sessionId: string;
 }
 
 interface CartState {
   items: CartItem[];
+  sessionId: string;
   totalAmount: number;
 }
 
 const initialState: CartState = {
   items: [],
   totalAmount: 0,
+  sessionId: undefined,
 };
 
 const cartSlice = createSlice({
@@ -32,6 +35,7 @@ const cartSlice = createSlice({
         state.items.push(action.payload);
       }
       state.totalAmount += action.payload.price * action.payload.quantity;
+      state.sessionId = action.payload.sessionId;
     },
     updateItemQuantity: (
       state,
@@ -70,6 +74,9 @@ const cartSlice = createSlice({
       state.items = [];
       state.totalAmount = 0;
     },
+    getAllCartItems: (state) => {
+      return state; // or console.log(state.items) if you just want to log
+    },
   },
 });
 
@@ -78,5 +85,6 @@ export const {
   removeItemFromCart,
   clearCart,
   updateItemQuantity,
+  getAllCartItems,
 } = cartSlice.actions;
 export default cartSlice.reducer;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Star, Plus, Minus, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Star, Plus, Minus, ShoppingCart, AlertCircle } from "lucide-react";
 import { useCart } from "../contexts/CartContext";
 import { useTheme } from "../contexts/ThemeContext";
 import ThemeToggle from "../components/ThemeToggle";
@@ -13,7 +13,15 @@ const ProductDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedImage, setSelectedImage] = useState(0);
-  const { addToCart, getTotalItems } = useCart();
+  const { 
+    addToCart, 
+    getTotalItems, 
+    operationLoading, 
+    error, 
+    clearError,
+    isItemInCart,
+    getItemQuantity 
+  } = useCart();
   const { theme } = useTheme();
 
   useEffect(() => {
@@ -40,19 +48,13 @@ const ProductDetail = () => {
     );
     if (!selectedBrandData) return;
 
-    for (let i = 0; i < quantity; i++) {
-      addToCart({
-        id: product._id,
-        name: product.productName,
-        brand: selectedBrand,
-        price: selectedBrandData.price,
-        image: product.productImages?.[selectedImage] || "",
-      });
-    }
-
-    alert(
-      `Added ${quantity} ${product.productName} (${selectedBrand}) to cart!`
-    );
+    addToCart({
+      id: product._id,
+      name: product.productName,
+      brand: selectedBrand,
+      price: selectedBrandData.price,
+      image: product.productImages?.[selectedImage] || "",
+    }, quantity);
   };
 
   if (!product) return null;
@@ -98,6 +100,24 @@ const ProductDetail = () => {
             Back to Products
           </Link>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
+                <span className="text-red-800 dark:text-red-200">{error.message}</span>
+              </div>
+              <button
+                onClick={clearError}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Product Images */}
@@ -178,29 +198,60 @@ const ProductDetail = () => {
               <div className="flex items-center space-x-3">
                 <motion.button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-2 border dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="p-2 border dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={quantity <= 1}
                 >
                   <Minus className="w-4 h-4 dark:text-white" />
                 </motion.button>
-                <span className="px-4 py-2 border dark:border-gray-600 rounded-md text-center min-w-[60px] dark:text-white">
-                  {quantity}
-                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max={selectedBrand ? product.brands.find((b: any) => b.name === selectedBrand)?.stock || 1 : 1}
+                  value={quantity}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 1;
+                    const maxStock = selectedBrand ? product.brands.find((b: any) => b.name === selectedBrand)?.stock || 1 : 1;
+                    setQuantity(Math.max(1, Math.min(value, maxStock)));
+                  }}
+                  className="px-4 py-2 border dark:border-gray-600 rounded-md text-center min-w-[80px] dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
                 <motion.button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="p-2 border dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onClick={() => {
+                    const maxStock = selectedBrand ? product.brands.find((b: any) => b.name === selectedBrand)?.stock || 1 : 1;
+                    setQuantity(Math.min(quantity + 1, maxStock));
+                  }}
+                  className="p-2 border dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={selectedBrand ? quantity >= (product.brands.find((b: any) => b.name === selectedBrand)?.stock || 1) : true}
                 >
                   <Plus className="w-4 h-4 dark:text-white" />
                 </motion.button>
               </div>
+              {selectedBrand && (
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-2 space-y-1">
+                  <p>Available: {product.brands.find((b: any) => b.name === selectedBrand)?.stock || 0} units</p>
+                  {isItemInCart(product._id, selectedBrand) && (
+                    <p className="text-blue-600 dark:text-blue-400">
+                      In cart: {getItemQuantity(product._id, selectedBrand)} units
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex space-x-4">
               <button
                 onClick={handleAddToCart}
-                className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+                disabled={
+                  !selectedBrand || 
+                  operationLoading?.type === 'ADD' ||
+                  (selectedBrand && isItemInCart(product._id, selectedBrand))
+                }
+                className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ShoppingCart className="w-5 h-5 mr-2" />
-                Add to Cart
+                {operationLoading?.type === 'ADD' ? 'Adding...' : 
+                 selectedBrand && isItemInCart(product._id, selectedBrand) ? 'Already in Cart' : 
+                 'Add to Cart'}
               </button>
             </div>
 

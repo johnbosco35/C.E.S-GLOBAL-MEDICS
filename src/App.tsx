@@ -21,6 +21,8 @@ import AdminSignup from "./pages/AdminSignup";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import store, { persistor } from "./redux/store";
+import CustomerSignup from "./pages/CustomerSignup";
+import CustomerLogin from "./pages/CustomerLogin";
 
 const queryClient = new QueryClient();
 
@@ -40,12 +42,17 @@ const App = () => (
                   <Route path="/product/:id" element={<ProductDetail />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/checkout" element={<Checkout />} />
-                  <Route path="/delivery/:orderId" element={<Delivery />} />
+                  <Route path="/delivery-details" element={<Delivery />} />
                   <Route path="/review/:id" element={<Review />} />
                   <Route path="/reviews/:id" element={<ReviewDetails />} />
                   <Route path="/admin/login" element={<AdminLogin />} />
                   <Route path="/admin/signup" element={<AdminSignup />} />
                   <Route path="/admin/*" element={<AdminDashboard />} />
+                  <Route
+                    path="/customer/register"
+                    element={<CustomerSignup />}
+                  />
+                  <Route path="/customer/login" element={<CustomerLogin />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

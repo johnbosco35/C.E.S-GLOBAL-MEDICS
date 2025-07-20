@@ -13,6 +13,7 @@ export interface Customer {
   joinDate: string;
   status: string;
 }
+const API_BASE_URL = "https://med-kit-lab-ces-be.onrender.com";
 
 export async function fetchCustomers(page = 1, limit = 10, search = "") {
   const params: any = { page, limit };
@@ -30,3 +31,29 @@ export async function fetchCustomerById(id: string) {
   );
   return res.data.customer;
 }
+
+// Customer management
+export const getAllCustomers = async (params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}) => {
+  try {
+    const { page = 1, limit = 10, search = "" } = params;
+
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(search && { search }),
+    });
+
+    const response = await axios.get(
+      `${API_BASE_URL}/api/customers?${queryParams}`
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("Failed to fetch customers:", error);
+    throw error;
+  }
+};

@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Search, Grid, List, Star, ShoppingCart } from "lucide-react";
+import {
+  Search,
+  Grid,
+  List,
+  Star,
+  ShoppingCart,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { getAllUserProduct, getProductsByCategory } from "@/Api/UserProduct";
+import { useCart } from "@/contexts/CartContext";
 
 interface Brand {
-  brandName: string;
+  name: string;
   price: number;
-  countInStock: number;
+  stock: number;
 }
 
 interface Product {
@@ -26,6 +35,9 @@ const Products = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { addToCart, isItemInCart, getItemQuantity, operationLoading } =
+    useCart();
 
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -35,15 +47,24 @@ const Products = () => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
+        setError(null);
         let res;
         if (category) {
           res = await getProductsByCategory(category);
         } else {
           res = await getAllUserProduct();
         }
-        setProducts(res.products || []);
-      } catch (error) {
+
+        if (res.success) {
+          setProducts(res.products || []);
+        } else {
+          setError(res.error || "Failed to fetch products");
+          setProducts([]);
+        }
+      } catch (error: any) {
         console.error("Error fetching products:", error);
+        setError(error?.message || "Failed to fetch products");
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -73,6 +94,29 @@ const Products = () => {
           return a.productName.localeCompare(b.productName);
       }
     });
+
+  const handleQuickAddToCart = async (product: Product) => {
+    try {
+      const firstBrand = product.brands[0];
+      if (!firstBrand) {
+        console.error("No brand available for product");
+        return;
+      }
+
+      await addToCart(
+        {
+          id: product._id,
+          name: product.productName,
+          brand: firstBrand.name,
+          price: firstBrand.price,
+          image: product.productImages[0] || "",
+        },
+        1
+      );
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -150,8 +194,30 @@ const Products = () => {
           </div>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <span className="text-red-800">{error}</span>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-600 hover:text-red-800"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading...</div>
+          <div className="text-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
+            <p className="text-gray-500">Loading products...</p>
+          </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12 text-gray-500 text-lg">
             No products found matching your search.
@@ -169,8 +235,11 @@ const Products = () => {
               const image = product.productImages[0];
 
               return (
-                <div
+                <motion.div
                   key={product._id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
                   className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ${
                     viewMode === "list" ? "flex" : ""
                   }`}
@@ -187,7 +256,7 @@ const Products = () => {
                         viewMode === "list" ? "w-full h-full" : "w-full h-48"
                       }`}
                     />
-                    {firstBrand?.countInStock === 0 && (
+                    {firstBrand?.stock === 0 && (
                       <div className="absolute inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center">
                         <span className="text-white font-semibold">
                           Out of Stock
@@ -204,7 +273,7 @@ const Products = () => {
                       {product.productName}
                     </h3>
                     <p className="text-sm text-gray-600 mb-2">
-                      {firstBrand?.brandName}
+                      {firstBrand?.name}
                     </p>
 
                     <div className="flex items-center mb-2">
@@ -225,23 +294,50 @@ const Products = () => {
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-xl font-bold text-gray-900">
-                        ₦{(firstBrand?.price ?? 0).toLocaleString()}
-                      </span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <span className="text-xl font-bold text-gray-900">
+                          ₦{(firstBrand?.price ?? 0).toLocaleString()}
+                        </span>
+                        {firstBrand &&
+                          isItemInCart(product._id, firstBrand.name) && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full ml-2">
+                              In Cart (
+                              {getItemQuantity(product._id, firstBrand.name)})
+                            </span>
+                          )}
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-2">
                       <Link
                         to={`/product/${product._id}`}
-                        className={`bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors ${
-                          firstBrand?.countInStock === 0
+                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center ${
+                          firstBrand?.stock === 0
                             ? "opacity-50 cursor-not-allowed"
                             : ""
                         }`}
                       >
                         View Details
                       </Link>
+                      {firstBrand && firstBrand.stock > 0 && (
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleQuickAddToCart(product)}
+                          disabled={
+                            operationLoading?.type === "ADD" ||
+                            (firstBrand &&
+                              isItemInCart(product._id, firstBrand.name))
+                          }
+                          className="bg-green-600 text-white py-2 px-3 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Quick Add to Cart"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                        </motion.button>
+                      )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
