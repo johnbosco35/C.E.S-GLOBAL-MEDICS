@@ -1,14 +1,38 @@
 import axios from "axios";
 
-const API_BASE_URL = "https://med-kit-lab-ces-be.onrender.com";
+const API_BASE_URL = "https://med-kit-lab-ces-be.onrender.com/api/orders";
 
-// Create Order
-export const createOrder = async (orderData) => {
+export interface GetAllOrdersParams {
+  page?: number;
+  limit?: number;
+  status?: string;
+}
+
+export const getAllOrders = async (params: GetAllOrdersParams = {}) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/orders`, orderData);
+    const { page = 1, limit = 10, status } = params;
+    const query = new URLSearchParams();
+    query.append("page", String(page));
+    query.append("limit", String(limit));
+    if (status) query.append("status", status);
+    const response = await axios.get(`${API_BASE_URL}/?${query.toString()}`);
     return response.data;
-  } catch (error) {
-    console.error("Error creating order:", error);
-    throw error;
+  } catch (error: any) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.message || "Failed to fetch orders");
+    }
+    throw new Error("Failed to fetch orders");
+  }
+};
+
+export const getOrderById = async (orderId: string) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/${orderId}`);
+    return response.data;
+  } catch (error: any) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.message || "Failed to fetch order");
+    }
+    throw new Error("Failed to fetch order");
   }
 };

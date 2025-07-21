@@ -8,10 +8,14 @@ import {
   TrendingUp,
   AlertTriangle,
   Plus,
-  Filter
+  Filter,
 } from "lucide-react";
 import ProductDetailModal from "./ProductDetailModal";
-import { getAllProducts, deleteProduct, updateProduct } from "@/Api/AdminProduct";
+import {
+  getAllProducts,
+  deleteProduct,
+  updateProduct,
+} from "@/Api/AdminProduct";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +38,7 @@ import {
 } from "@/components/ui/pagination";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface Brand {
   name: string;
@@ -66,6 +71,7 @@ const AdminProducts = () => {
   const [outOfStockProducts, setOutOfStockProducts] = useState(0);
   const itemsPerPage = 10;
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const loadProducts = async () => {
     try {
@@ -88,12 +94,13 @@ const AdminProducts = () => {
 
       setProducts(fetchedProducts);
       setTotalProducts(fetchedProducts.length);
-      setActiveProducts(fetchedProducts.filter(p =>
-        p.brands.some(b => b.stock > 0)
-      ).length);
-      setOutOfStockProducts(fetchedProducts.filter(p =>
-        p.brands.every(b => b.stock === 0)
-      ).length);
+      setActiveProducts(
+        fetchedProducts.filter((p) => p.brands.some((b) => b.stock > 0)).length
+      );
+      setOutOfStockProducts(
+        fetchedProducts.filter((p) => p.brands.every((b) => b.stock === 0))
+          .length
+      );
     } catch (err: any) {
       console.error("❌ Failed to fetch products:", err);
       setError(err?.response?.data?.message || "Failed to load products");
@@ -115,11 +122,12 @@ const AdminProducts = () => {
     const matchesSearch =
       product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.brands?.some(brand =>
+      product.brands?.some((brand) =>
         brand.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
-    const matchesCategory = categoryFilter === "all" || product.category === categoryFilter;
+    const matchesCategory =
+      categoryFilter === "all" || product.category === categoryFilter;
 
     return matchesSearch && matchesCategory;
   });
@@ -136,7 +144,10 @@ const AdminProducts = () => {
     setIsModalOpen(true);
   };
 
-  const handleUpdateProduct = async (updatedProduct: Product) => {
+  const handleUpdateProduct = async (
+    updatedProduct: Product,
+    imagesTouched: boolean
+  ) => {
     try {
       const form = new FormData();
       form.append("productName", updatedProduct.name || "");
@@ -144,43 +155,73 @@ const AdminProducts = () => {
       form.append("description", updatedProduct.description || "");
       form.append("brands", JSON.stringify(updatedProduct.brands));
 
-      // Handle images: only send new File objects, keep existing URLs
-      const newImages = updatedProduct.images.filter(img => img instanceof File);
-      newImages.forEach((img: File) => {
-        form.append("productImages", img);
-      });
-
-      // If there are existing images (strings), we need to handle them differently
-      const existingImages = updatedProduct.images.filter(img => typeof img === "string");
-      if (existingImages.length > 0) {
-        form.append("existingImages", JSON.stringify(existingImages));
+      // Only send images if imagesTouched is true
+      if (imagesTouched) {
+        const newImages = updatedProduct.images.filter(
+          (img) => img instanceof File
+        );
+        newImages.forEach((img: File) => {
+          form.append("productImages", img);
+        });
       }
 
-      // Send the total count of images to help backend understand what to keep
-      form.append("totalImages", updatedProduct.images.length.toString());
+      console.log("📤 Sending update data:", {
+        productName: updatedProduct.name,
+        category: updatedProduct.category,
+        imagesTouched,
+        totalImages: updatedProduct.images.length,
+        allImages: updatedProduct.images.map((img, idx) => ({
+          index: idx,
+          type: typeof img,
+          isFile: img instanceof File,
+          value: img instanceof File ? img.name : img,
+        })),
+      });
 
-      await updateProduct(updatedProduct.id, form);
+      const response = await updateProduct(updatedProduct.id, form);
+      console.log("📥 Update response:", response);
 
-      // Update local state - convert Files back to strings for display
-      const processedProduct = {
-        ...updatedProduct,
-        images: updatedProduct.images.map(img => 
-          img instanceof File ? URL.createObjectURL(img) : img
-        )
-      };
+      // Update local state with the response data
+      if (response.product) {
+        const updatedProductData = {
+          id: response.product._id || response.product.id,
+          name: response.product.productName || response.product.name,
+          category: response.product.category,
+          brands: response.product.brands || [],
+          description: response.product.description,
+          images:
+            response.product.productImages || response.product.images || [],
+          createdAt: response.product.createdAt,
+          updatedAt: response.product.updatedAt,
+        };
 
-      setProducts(prev =>
-        prev.map(p => p.id === updatedProduct.id ? processedProduct : p)
-      );
+        setProducts((prev) =>
+          prev.map((p) => (p.id === updatedProduct.id ? updatedProductData : p))
+        );
+      } else {
+        // Fallback: update with processed data
+        const processedProduct = {
+          ...updatedProduct,
+          images: updatedProduct.images.map((img) =>
+            img instanceof File ? URL.createObjectURL(img) : img
+          ),
+        };
+
+        setProducts((prev) =>
+          prev.map((p) => (p.id === updatedProduct.id ? processedProduct : p))
+        );
+      }
 
       toast({
         title: "Success",
         description: "Product updated successfully!",
       });
 
+      // Reload products to get the latest data from server
+      await loadProducts();
       setIsModalOpen(false);
     } catch (err: any) {
-      console.error("Update failed:", err);
+      console.error("❌ Update failed:", err);
       toast({
         title: "Error",
         description: err?.response?.data?.message || "Failed to update product",
@@ -194,7 +235,7 @@ const AdminProducts = () => {
       await deleteProduct(productId);
 
       // Update local state
-      setProducts(prev => prev.filter(p => p.id !== productId));
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
 
       toast({
         title: "Success",
@@ -211,20 +252,20 @@ const AdminProducts = () => {
   };
 
   const getStatusColor = (product: Product) => {
-    const hasStock = product.brands.some(b => b.stock > 0);
+    const hasStock = product.brands.some((b) => b.stock > 0);
     return hasStock
       ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
       : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100";
   };
 
   const getStatusText = (product: Product) => {
-    const hasStock = product.brands.some(b => b.stock > 0);
+    const hasStock = product.brands.some((b) => b.stock > 0);
     return hasStock ? "In Stock" : "Out of Stock";
   };
 
   const getLowestPrice = (product: Product) => {
     if (!product.brands.length) return 0;
-    return Math.min(...product.brands.map(b => Number(b.price) || 0));
+    return Math.min(...product.brands.map((b) => Number(b.price) || 0));
   };
 
   const getTotalStock = (product: Product) => {
@@ -261,14 +302,14 @@ const AdminProducts = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Products
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalProducts}</div>
-            <p className="text-xs text-muted-foreground">
-              All products
-            </p>
+            <p className="text-xs text-muted-foreground">All products</p>
           </CardContent>
         </Card>
 
@@ -279,9 +320,7 @@ const AdminProducts = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{activeProducts}</div>
-            <p className="text-xs text-muted-foreground">
-              Available products
-            </p>
+            <p className="text-xs text-muted-foreground">Available products</p>
           </CardContent>
         </Card>
 
@@ -292,9 +331,7 @@ const AdminProducts = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{outOfStockProducts}</div>
-            <p className="text-xs text-muted-foreground">
-              Need restocking
-            </p>
+            <p className="text-xs text-muted-foreground">Need restocking</p>
           </CardContent>
         </Card>
 
@@ -305,11 +342,9 @@ const AdminProducts = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {new Set(products.map(p => p.category)).size}
+              {new Set(products.map((p) => p.category)).size}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Unique categories
-            </p>
+            <p className="text-xs text-muted-foreground">Unique categories</p>
           </CardContent>
         </Card>
       </div>
@@ -338,7 +373,7 @@ const AdminProducts = () => {
             <SelectItem value="Disposables">Disposables</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={() => window.location.href = '/admin/products/new'}>
+        <Button onClick={() => navigate("/admin/new-product")}>
           <Plus className="w-4 h-4 mr-2" />
           Add Product
         </Button>
@@ -411,9 +446,22 @@ const AdminProducts = () => {
                         <div className="flex items-center">
                           {product.images.length > 0 && (
                             <img
-                              src={typeof product.images[0] === "string" ? product.images[0] : URL.createObjectURL(product.images[0] as File)}
+                              src={
+                                typeof product.images[0] === "string"
+                                  ? product.images[0]
+                                  : product.images[0] instanceof File
+                                  ? URL.createObjectURL(product.images[0])
+                                  : product.images[0]
+                              }
                               alt={product.name}
                               className="w-10 h-10 rounded-lg object-cover mr-3"
+                              onError={(e) => {
+                                console.error(
+                                  "Image failed to load:",
+                                  product.images[0]
+                                );
+                                e.currentTarget.style.display = "none";
+                              }}
                             />
                           )}
                           <div>
@@ -421,7 +469,8 @@ const AdminProducts = () => {
                               {product.name}
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {product.brands.length} brand{product.brands.length !== 1 ? 's' : ''}
+                              {product.brands.length} brand
+                              {product.brands.length !== 1 ? "s" : ""}
                             </div>
                           </div>
                         </div>
@@ -432,7 +481,13 @@ const AdminProducts = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         ₦{getLowestPrice(product).toLocaleString()}
                         {product.brands.length > 1 && (
-                          <span className="text-gray-500"> - ₦{Math.max(...product.brands.map(b => Number(b.price) || 0)).toLocaleString()}</span>
+                          <span className="text-gray-500">
+                            {" "}
+                            - ₦
+                            {Math.max(
+                              ...product.brands.map((b) => Number(b.price) || 0)
+                            ).toLocaleString()}
+                          </span>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">

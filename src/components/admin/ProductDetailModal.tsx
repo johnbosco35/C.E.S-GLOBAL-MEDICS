@@ -31,17 +31,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Edit, 
-  Trash2, 
-  ImageIcon, 
-  Package, 
-  DollarSign, 
+import {
+  Edit,
+  Trash2,
+  ImageIcon,
+  Package,
+  DollarSign,
   TrendingUp,
   Save,
   X,
   Plus,
-  AlertTriangle
+  AlertTriangle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
@@ -67,7 +67,7 @@ interface Props {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (product: Product) => void;
+  onUpdate: (product: Product, imagesTouched: boolean) => void;
   onDelete: (productId: string) => void;
 }
 
@@ -82,6 +82,7 @@ const ProductDetailModal: React.FC<Props> = ({
   const [editedProduct, setEditedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [imagesTouched, setImagesTouched] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -89,7 +90,8 @@ const ProductDetailModal: React.FC<Props> = ({
       const deep = JSON.parse(JSON.stringify(product));
       setEditedProduct({
         ...deep,
-        description: product.description || "No description available for this product.",
+        description:
+          product.description || "No description available for this product.",
       });
     }
     setIsEditing(false);
@@ -98,11 +100,15 @@ const ProductDetailModal: React.FC<Props> = ({
 
   if (!product || !editedProduct) return null;
 
-  const totalStock = editedProduct.brands.reduce((sum, b) => sum + (b.stock || 0), 0);
+  const totalStock = editedProduct.brands.reduce(
+    (sum, b) => sum + (b.stock || 0),
+    0
+  );
   const status = totalStock > 0 ? "In Stock" : "Out of Stock";
-  const statusColor = totalStock > 0 
-    ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
-    : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100";
+  const statusColor =
+    totalStock > 0
+      ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
+      : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100";
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -122,6 +128,17 @@ const ProductDetailModal: React.FC<Props> = ({
     // Images validation
     if (editedProduct.images.length === 0) {
       newErrors.images = "At least one product image is required";
+    } else {
+      // Check if all images are valid files (for new uploads)
+      const invalidImages = editedProduct.images.filter(
+        (img) => !(img instanceof File)
+      );
+      if (
+        invalidImages.length > 0 &&
+        editedProduct.images.length === invalidImages.length
+      ) {
+        newErrors.images = "Please select valid image files";
+      }
     }
 
     editedProduct.brands.forEach((brand, index) => {
@@ -146,7 +163,7 @@ const ProductDetailModal: React.FC<Props> = ({
   ) => {
     setEditedProduct((prev) => prev && { ...prev, [field]: value });
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: "" }));
+      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
@@ -157,11 +174,13 @@ const ProductDetailModal: React.FC<Props> = ({
         : b
     );
     setEditedProduct({ ...editedProduct, brands: updated });
-    
+
     // Clear error for this field
-    const errorKey = `brand${idx}${field.charAt(0).toUpperCase() + field.slice(1)}`;
+    const errorKey = `brand${idx}${
+      field.charAt(0).toUpperCase() + field.slice(1)
+    }`;
     if (errors[errorKey]) {
-      setErrors(prev => ({ ...prev, [errorKey]: "" }));
+      setErrors((prev) => ({ ...prev, [errorKey]: "" }));
     }
   };
 
@@ -181,24 +200,24 @@ const ProductDetailModal: React.FC<Props> = ({
       });
       return;
     }
-    
+
     const updated = editedProduct.brands.filter((_, i) => i !== index);
     setEditedProduct({ ...editedProduct, brands: updated });
   };
 
   const handleSave = async () => {
-    if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the errors before saving",
-        variant: "destructive",
-      });
-      return;
-    }
+    // if (!validateForm()) {
+    //   toast({
+    //     title: "Validation Error",
+    //     description: "Please fix the errors before saving",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
 
     setLoading(true);
     try {
-      await onUpdate(editedProduct);
+      await onUpdate(editedProduct, imagesTouched);
       setIsEditing(false);
       toast({
         title: "Success",
@@ -219,19 +238,20 @@ const ProductDetailModal: React.FC<Props> = ({
       const deep = JSON.parse(JSON.stringify(product));
       setEditedProduct({
         ...deep,
-        description: product.description || "No description available for this product.",
+        description:
+          product.description || "No description available for this product.",
       });
     }
   };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -265,11 +285,7 @@ const ProductDetailModal: React.FC<Props> = ({
                     <X className="w-4 h-4 mr-2" />
                     Cancel
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={loading}
-                  >
+                  <Button size="sm" onClick={handleSave} disabled={loading}>
                     {loading ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                     ) : (
@@ -290,12 +306,13 @@ const ProductDetailModal: React.FC<Props> = ({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Product</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to delete "{product.name}"? This action cannot be undone.
+                      Are you sure you want to delete "{product.name}"? This
+                      action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction 
+                    <AlertDialogAction
                       onClick={() => onDelete(product.id)}
                       className="bg-red-600 hover:bg-red-700"
                     >
@@ -319,28 +336,36 @@ const ProductDetailModal: React.FC<Props> = ({
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Package className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">Product ID</span>
+                <span className="text-sm font-medium text-blue-600">
+                  Product ID
+                </span>
               </div>
               <p className="text-lg font-mono">#{product.id.slice(-8)}</p>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-600">Status</span>
+                <span className="text-sm font-medium text-green-600">
+                  Status
+                </span>
               </div>
               <Badge className={statusColor}>{status}</Badge>
             </div>
             <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-medium text-purple-600">Total Stock</span>
+                <span className="text-sm font-medium text-purple-600">
+                  Total Stock
+                </span>
               </div>
               <p className="text-lg font-bold">{totalStock}</p>
             </div>
             <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Package className="w-4 h-4 text-orange-600" />
-                <span className="text-sm font-medium text-orange-600">Brands</span>
+                <span className="text-sm font-medium text-orange-600">
+                  Brands
+                </span>
               </div>
               <p className="text-lg font-bold">{editedProduct.brands.length}</p>
             </div>
@@ -357,10 +382,15 @@ const ProductDetailModal: React.FC<Props> = ({
             {editedProduct.images.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
                 {editedProduct.images.map((img, i) => {
-                  const src = typeof img === "string" ? img : (img instanceof File ? URL.createObjectURL(img) : img);
+                  const src =
+                    typeof img === "string"
+                      ? img
+                      : img instanceof File
+                      ? URL.createObjectURL(img)
+                      : img;
                   return (
-                    <motion.div 
-                      key={i} 
+                    <motion.div
+                      key={i}
                       className="relative group"
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -370,22 +400,37 @@ const ProductDetailModal: React.FC<Props> = ({
                         src={src}
                         alt={`Product image ${i + 1}`}
                         className="w-full h-32 object-cover rounded-lg border"
+                        onError={(e) => {
+                          console.error("Image failed to load:", img);
+                          e.currentTarget.style.display = "none";
+                        }}
                       />
                       {isEditing && (
                         <button
                           type="button"
                           className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
                           onClick={() => {
+                            setImagesTouched(true);
                             const copy = [...editedProduct.images];
                             copy.splice(i, 1);
+
+                            if (copy.length === 0) {
+                              toast({
+                                title: "Warning",
+                                description:
+                                  "You must add at least one new image before saving",
+                                variant: "destructive",
+                              });
+                            }
+
                             setEditedProduct({
                               ...editedProduct,
                               images: copy,
                             });
-                            
+
                             // Clear image error if it exists
                             if (errors.images) {
-                              setErrors(prev => ({ ...prev, images: "" }));
+                              setErrors((prev) => ({ ...prev, images: "" }));
                             }
                           }}
                         >
@@ -404,32 +449,42 @@ const ProductDetailModal: React.FC<Props> = ({
             )}
             {isEditing && (
               <div className="mt-4">
-                <Label>Add Images</Label>
+                <Label>Replace Images</Label>
                 <Input
                   type="file"
                   accept="image/*"
                   multiple
                   onChange={(e) => {
+                    setImagesTouched(true);
                     const files = Array.from(e.target.files || []);
-                    const currentImages = editedProduct.images.length;
-                    const newImages = files.slice(0, 3 - currentImages); // Limit to 3 total images
-                    
-                    if (files.length > 3 - currentImages) {
+
+                    if (files.length > 3) {
                       toast({
                         title: "Too many images",
-                        description: `You can only have up to 3 images. ${files.length - (3 - currentImages)} image(s) were not added.`,
+                        description: `You can only have up to 3 images. ${
+                          files.length - 3
+                        } image(s) were not added.`,
                         variant: "destructive",
                       });
+                      // Only take the first 3 files
+                      const limitedFiles = files.slice(0, 3);
+                      setEditedProduct({
+                        ...editedProduct,
+                        images: limitedFiles,
+                      });
+                    } else {
+                      setEditedProduct({
+                        ...editedProduct,
+                        images: files,
+                      });
                     }
-                    
-                    setEditedProduct({
-                      ...editedProduct,
-                      images: [...editedProduct.images, ...newImages],
-                    });
                   }}
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  {editedProduct.images.length}/3 images selected
+                  {editedProduct.images.length}/3 images selected.
+                  <span className="text-orange-600">
+                    Note: This will replace all existing images.
+                  </span>
                 </p>
               </div>
             )}
@@ -462,12 +517,18 @@ const ProductDetailModal: React.FC<Props> = ({
                 value={editedProduct.category}
                 onValueChange={(value) => handleInputChange("category", value)}
               >
-                <SelectTrigger className={errors.category ? "border-red-500" : ""}>
+                <SelectTrigger
+                  className={errors.category ? "border-red-500" : ""}
+                >
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Medical Equipment">Medical Equipment</SelectItem>
-                  <SelectItem value="Laboratory Kits">Laboratory Kits</SelectItem>
+                  <SelectItem value="Medical Equipment">
+                    Medical Equipment
+                  </SelectItem>
+                  <SelectItem value="Laboratory Kits">
+                    Laboratory Kits
+                  </SelectItem>
                   <SelectItem value="Reagents">Reagents</SelectItem>
                   <SelectItem value="Disposables">Disposables</SelectItem>
                 </SelectContent>
@@ -505,36 +566,44 @@ const ProductDetailModal: React.FC<Props> = ({
                 </Button>
               )}
             </div>
-            
+
             {errors.brands && (
               <p className="text-red-500 text-sm">{errors.brands}</p>
             )}
 
             {editedProduct.brands.map((brand, i) => (
-              <motion.div 
-                key={i} 
+              <motion.div
+                key={i}
                 className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border rounded-lg"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
                 <div>
-                  <Label className={errors[`brand${i}Name`] ? "text-red-600" : ""}>
+                  <Label
+                    className={errors[`brand${i}Name`] ? "text-red-600" : ""}
+                  >
                     Brand Name *
                   </Label>
                   <Input
                     disabled={!isEditing}
                     value={brand.name}
                     placeholder="Brand name"
-                    onChange={(e) => updateBrandField(i, "name", e.target.value)}
+                    onChange={(e) =>
+                      updateBrandField(i, "name", e.target.value)
+                    }
                     className={errors[`brand${i}Name`] ? "border-red-500" : ""}
                   />
                   {errors[`brand${i}Name`] && (
-                    <p className="text-red-500 text-sm mt-1">{errors[`brand${i}Name`]}</p>
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors[`brand${i}Name`]}
+                    </p>
                   )}
                 </div>
                 <div>
-                  <Label className={errors[`brand${i}Price`] ? "text-red-600" : ""}>
+                  <Label
+                    className={errors[`brand${i}Price`] ? "text-red-600" : ""}
+                  >
                     Price (₦) *
                   </Label>
                   <Input
@@ -542,15 +611,21 @@ const ProductDetailModal: React.FC<Props> = ({
                     type="number"
                     value={brand.price}
                     placeholder="0.00"
-                    onChange={(e) => updateBrandField(i, "price", e.target.value)}
+                    onChange={(e) =>
+                      updateBrandField(i, "price", e.target.value)
+                    }
                     className={errors[`brand${i}Price`] ? "border-red-500" : ""}
                   />
                   {errors[`brand${i}Price`] && (
-                    <p className="text-red-500 text-sm mt-1">{errors[`brand${i}Price`]}</p>
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors[`brand${i}Price`]}
+                    </p>
                   )}
                 </div>
                 <div>
-                  <Label className={errors[`brand${i}Stock`] ? "text-red-600" : ""}>
+                  <Label
+                    className={errors[`brand${i}Stock`] ? "text-red-600" : ""}
+                  >
                     Stock *
                   </Label>
                   <Input
@@ -558,11 +633,15 @@ const ProductDetailModal: React.FC<Props> = ({
                     type="number"
                     value={brand.stock}
                     placeholder="0"
-                    onChange={(e) => updateBrandField(i, "stock", e.target.value)}
+                    onChange={(e) =>
+                      updateBrandField(i, "stock", e.target.value)
+                    }
                     className={errors[`brand${i}Stock`] ? "border-red-500" : ""}
                   />
                   {errors[`brand${i}Stock`] && (
-                    <p className="text-red-500 text-sm mt-1">{errors[`brand${i}Stock`]}</p>
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors[`brand${i}Stock`]}
+                    </p>
                   )}
                 </div>
                 {isEditing && (

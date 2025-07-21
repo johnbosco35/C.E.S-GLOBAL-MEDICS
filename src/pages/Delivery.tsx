@@ -18,7 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { getPaymentProof, addDeliveryDetails } from "@/Api/CheckOutApi";
+import { getPaymentProof } from "@/Api/CheckOutApi";
+import { addDeliveryDetails } from "@/Api/DeliveryApi";
 import { useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
 import {
@@ -82,6 +83,7 @@ const Delivery = () => {
     address: "",
     city: "",
     state: "",
+    zipCode: "",
     additionalInfo: "",
   });
 
@@ -104,6 +106,7 @@ const Delivery = () => {
         setLoading(true);
         setError(null);
         const data = await getPaymentProof(id);
+        console.log(data);
         setPaymentData(data);
 
         // Pre-fill delivery info with customer data (with fallbacks)
@@ -113,6 +116,7 @@ const Delivery = () => {
           address: data.session.customerId.address?.street || "",
           city: data.session.customerId.address?.city || "",
           state: data.session.customerId.address?.state || "",
+          zipCode: data.session.customerId.address?.zipCode || "",
           additionalInfo: "",
         });
       } catch (error) {
@@ -148,10 +152,10 @@ const Delivery = () => {
       return;
     }
 
-    if (!customerId || !sessionId) {
+    if (!customerId) {
       toast({
         title: "Error",
-        description: "Missing customer or session information",
+        description: "Missing session information",
         variant: "destructive",
       });
       return;
@@ -161,7 +165,16 @@ const Delivery = () => {
       setLoading(true);
       setError(null);
 
-      await addDeliveryDetails(customerId, sessionId, deliveryInfo);
+      await addDeliveryDetails(customerId, {
+        fullName: deliveryInfo.fullName,
+        phone: deliveryInfo.phone,
+        address: deliveryInfo.address,
+        city: deliveryInfo.city,
+        state: deliveryInfo.state,
+        zipCode: deliveryInfo.zipCode, // You may want to add a zipCode field to your form and state
+        landmark: "", // You may want to add a landmark field to your form and state
+        deliveryInstructions: deliveryInfo.additionalInfo,
+      });
 
       toast({
         title: "Success",
@@ -200,7 +213,7 @@ const Delivery = () => {
     switch (status) {
       case "submitted":
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100";
-      case "confirmed":
+      case "approved":
         return "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100";
       case "rejected":
         return "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100";
@@ -209,7 +222,7 @@ const Delivery = () => {
     }
   };
 
-  const isPaymentConfirmed = paymentData?.session.paymentStatus === "confirmed";
+  const isPaymentConfirmed = paymentData?.session.paymentStatus === "approved";
 
   if (loading) {
     return (
@@ -358,7 +371,9 @@ const Delivery = () => {
               </div>
               <div>
                 <Label>Payment Status</Label>
-                <Badge className={getStatusColor(paymentData.session.paymentStatus)}>
+                <Badge
+                  className={getStatusColor(paymentData.session.paymentStatus)}
+                >
                   {paymentData.session.paymentStatus}
                 </Badge>
               </div>
@@ -386,7 +401,8 @@ const Delivery = () => {
                   <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
                     <Clock className="w-5 h-5" />
                     <p className="text-sm">
-                      Payment not approved. Please wait for admin to approve payment.
+                      Payment not approved. Please wait for admin to approve
+                      payment.
                     </p>
                   </div>
                 </div>
@@ -451,6 +467,15 @@ const Delivery = () => {
                     disabled={!isPaymentConfirmed}
                   />
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="state">Zipcode </Label>
+                <Input
+                  id="state"
+                  value={deliveryInfo.zipCode}
+                  onChange={(e) => handleInputChange("state", e.target.value)}
+                  disabled={!isPaymentConfirmed}
+                />
               </div>
               <div>
                 <Label htmlFor="additionalInfo">Additional Information</Label>
