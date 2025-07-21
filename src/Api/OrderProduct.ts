@@ -36,3 +36,20 @@ export const getOrderById = async (orderId: string) => {
     throw new Error("Failed to fetch order");
   }
 };
+
+export const updateOrderStatus = async (orderId: string, status: string) => {
+  try {
+    const response = await axios.put(`${API_BASE_URL}/${orderId}/status`, {
+      status,
+    });
+    return response.data;
+  } catch (error: any) {
+    console.log("Error updating order status:", error);
+    if (error.response && error.response.data) {
+      throw new Error(
+        error.response.data.message || "Failed to update order status"
+      );
+    }
+    throw new Error("Failed to update order status");
+  }
+};
