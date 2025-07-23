@@ -438,12 +438,12 @@ const Checkout = () => {
                   <span>Subtotal</span>
                   <span>₦{checkoutData.summary.subtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center">
+                {/* <div className="flex justify-between items-center">
                   <span>Shipping Fee</span>
                   <span>
                     ₦{checkoutData.summary.shippingFee.toLocaleString()}
                   </span>
-                </div>
+                </div> */}
                 <div className="flex justify-between items-center text-lg font-bold border-t pt-2">
                   <span>Total</span>
                   <span>₦{checkoutData.summary.total.toLocaleString()}</span>

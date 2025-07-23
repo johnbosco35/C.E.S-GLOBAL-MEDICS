@@ -46,9 +46,9 @@ const Cart = () => {
   console.log("Session ID:", sessionId);
 
   const subtotal = getTotalPrice();
-  const shipping = subtotal > 0 ? 1500 : 0;
-  const tax = subtotal * 0.08;
-  const total = subtotal + shipping + tax;
+  // const shipping = subtotal > 0 ? 1500 : 0;
+  // const tax = subtotal * 0.08;
+  const total = subtotal;
 
   const handleProceedToCheckout = async () => {
     if (cartItems.length === 0) {
@@ -244,7 +244,7 @@ const Cart = () => {
                     ₦{subtotal.toLocaleString()}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                {/* <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">
                     Shipping
                   </span>
@@ -259,7 +259,7 @@ const Cart = () => {
                   <span className="font-semibold dark:text-white">
                     ₦{tax.toLocaleString()}
                   </span>
-                </div>
+                </div> */}
               </div>
 
               <div className="border-t pt-3 mt-3 border-gray-200 dark:border-gray-700">
