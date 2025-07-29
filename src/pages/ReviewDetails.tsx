@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Star, User, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Star, User, ShieldCheck, Loader2, RefreshCw } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import ThemeToggle from "../components/ThemeToggle";
 import { motion } from "framer-motion";
+import { getProductReviews } from "@/Api/UserProduct";
+import { useToast } from "@/hooks/use-toast";
 
 interface Review {
-  id: string;
+  _id: string;
   productId: string;
   userName: string;
   rating: number;
@@ -19,20 +21,41 @@ interface Review {
 const ReviewDetails = () => {
   const { id } = useParams();
   const { theme } = useTheme();
+  const { toast } = useToast();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [sortBy, setSortBy] = useState("newest");
+  const [loading, setLoading] = useState(false);
+
+  const fetchReviews = async () => {
+    if (!id) return;
+    
+    setLoading(true);
+    try {
+      const result = await getProductReviews(id);
+      if (result.success) {
+        setReviews(result.reviews);
+      } else {
+        toast({
+          title: "Error fetching reviews",
+          description: result.error || "Failed to fetch reviews. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+      toast({
+        title: "Error fetching reviews",
+        description: "An error occurred while fetching reviews. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Load all reviews for this product
-    const savedReviews = localStorage.getItem("productReviews");
-    if (savedReviews) {
-      const allReviews = JSON.parse(savedReviews);
-      const productReviews = allReviews.filter(
-        (r: Review) => r.productId === id
-      );
-      setReviews(productReviews);
-    }
-  }, [id]);
+    fetchReviews();
+  }, [id, toast]);
 
   const sortedReviews = [...reviews].sort((a, b) => {
     switch (sortBy) {
@@ -64,6 +87,15 @@ const ReviewDetails = () => {
     reviews.length > 0
       ? reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length
       : 0;
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
   return (
     <div
@@ -113,19 +145,40 @@ const ReviewDetails = () => {
                 </div>
               </div>
             </div>
-            <motion.select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="highest">Highest Rating</option>
-              <option value="lowest">Lowest Rating</option>
-            </motion.select>
+            <div className="flex items-center gap-3">
+              <motion.button
+                onClick={fetchReviews}
+                disabled={loading}
+                className="p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-50"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+              </motion.button>
+              <Link
+                to={`/review/${id}`}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                Write Review
+              </Link>
+              <motion.select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="highest">Highest Rating</option>
+                <option value="lowest">Lowest Rating</option>
+              </motion.select>
+            </div>
           </div>
 
-          {sortedReviews.length === 0 ? (
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            </div>
+          ) : sortedReviews.length === 0 ? (
             <p className="text-gray-600 dark:text-gray-400 text-center py-8">
               No reviews yet for this product.
             </p>
@@ -133,7 +186,7 @@ const ReviewDetails = () => {
             <div className="space-y-6">
               {sortedReviews.map((reviewItem) => (
                 <div
-                  key={reviewItem.id}
+                  key={reviewItem._id}
                   className="border-b dark:border-gray-700 pb-6 last:border-b-0"
                 >
                   <div className="flex items-start space-x-4">
@@ -153,7 +206,7 @@ const ReviewDetails = () => {
                           )}
                         </div>
                         <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {reviewItem.date}
+                          {formatDate(reviewItem.date)}
                         </span>
                       </div>
                       <div className="flex items-center mt-1 mb-3">

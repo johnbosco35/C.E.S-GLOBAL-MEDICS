@@ -242,3 +242,83 @@ export const searchProducts = async (query: string, page = 1, limit = 10) => {
     };
   }
 };
+
+// Get product reviews
+export const getProductReviews = async (productId: string) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/user/products/review/${productId}`);
+    
+    // Validate response structure
+    if (!response.data) {
+      throw new Error("Invalid response from server");
+    }
+    
+    // Ensure reviews array exists
+    const reviews = response.data.reviews || response.data || [];
+    
+    // Transform reviews to include required fields
+    const transformedReviews = reviews.map((review: any) => ({
+      _id: review._id,
+      productId: review.productId,
+      userName: review.userName || review.user?.name || "Anonymous User",
+      rating: review.rating || 0,
+      review: review.review || review.comment || "",
+      images: review.images || [],
+      date: review.createdAt || review.date || new Date().toISOString(),
+      verified: review.verified || false,
+    }));
+    
+    return {
+      reviews: transformedReviews,
+      total: transformedReviews.length,
+      success: true,
+    };
+  } catch (error: any) {
+    console.error(`Error fetching reviews for product ${productId}:`, error);
+    
+    // Return fallback data structure
+    return {
+      reviews: [],
+      total: 0,
+      success: false,
+      error: error?.response?.data?.message || error?.message || "Failed to fetch product reviews",
+    };
+  }
+};
+
+// Leave a review for a product
+export const leaveReview = async (
+  customerId: string,
+  productId: string,
+  reviewData: {
+    rating: number;
+    comment: string;
+    images?: string[];
+  }
+) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/user/products/review/${customerId}/${productId}`,
+      reviewData
+    );
+    
+    // Validate response structure
+    if (!response.data) {
+      throw new Error("Invalid response from server");
+    }
+    
+    return {
+      success: true,
+      message: "Review submitted successfully",
+      review: response.data.review || response.data,
+    };
+  } catch (error: any) {
+    console.error(`Error leaving review for product ${productId}:`, error);
+    
+    // Return fallback data structure
+    return {
+      success: false,
+      error: error?.response?.data?.message || error?.message || "Failed to submit review",
+    };
+  }
+};

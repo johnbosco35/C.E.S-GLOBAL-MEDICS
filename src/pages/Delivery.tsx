@@ -176,6 +176,40 @@ const Delivery = () => {
         deliveryInstructions: deliveryInfo.additionalInfo,
       });
 
+      // Store order to localStorage
+      const orderData = {
+        orderId: paymentData?.session.sessionNumber || `ORDER-${Date.now()}`,
+        customerId: customerId,
+        sessionId: sessionId,
+        orderDate: new Date().toISOString(),
+        items: paymentData?.session.items || [],
+        totalAmount: paymentData?.session.totalAmount || 0,
+        shippingFee: paymentData?.session.shippingFee || 0,
+        paymentStatus: paymentData?.session.paymentStatus || "pending",
+        deliveryInfo: {
+          fullName: deliveryInfo.fullName,
+          phone: deliveryInfo.phone,
+          address: deliveryInfo.address,
+          city: deliveryInfo.city,
+          state: deliveryInfo.state,
+          zipCode: deliveryInfo.zipCode,
+          additionalInfo: deliveryInfo.additionalInfo,
+        },
+        orderStatus: "delivery_requested",
+        createdAt: new Date().toISOString(),
+      };
+
+      // Get existing orders from localStorage
+      const existingOrders = JSON.parse(localStorage.getItem("orders") || "[]");
+      
+      // Add new order to the array
+      existingOrders.push(orderData);
+      
+      // Store updated orders back to localStorage
+      localStorage.setItem("orders", JSON.stringify(existingOrders));
+
+      console.log("Order stored to localStorage:", orderData);
+
       toast({
         title: "Success",
         description: "Delivery details submitted successfully",

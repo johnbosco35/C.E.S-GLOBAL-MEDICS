@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Star, Upload, X, User, ShieldCheck } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import ThemeToggle from "../components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { leaveReview, getProductReviews } from "@/Api/UserProduct";
+import { useSelector } from "react-redux";
+import { RootState } from "@/redux/store";
 
 interface Review {
-  id: string;
+  _id: string;
   productId: string;
   userName: string;
   rating: number;
@@ -19,6 +22,7 @@ interface Review {
 
 const Review = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { theme } = useTheme();
   const { toast } = useToast();
   const [rating, setRating] = useState(0);
@@ -29,27 +33,94 @@ const Review = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [userName, setUserName] = useState("Anonymous User");
   const [hasPurchased, setHasPurchased] = useState(false);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  // Get customer from Redux state
+  const customer = useSelector((state: RootState) => state.customer.customer);
+  const customerId = customer?._id;
+
+  // Check authentication
+  useEffect(() => {
+    if (!customerId) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to write a review.",
+        variant: "destructive",
+      });
+      navigate("/customer/login");
+      return;
+    }
+  }, [customerId, navigate, toast]);
 
   useEffect(() => {
+    // Set user name from customer data
+    if (customer?.fullName) {
+      setUserName(customer.fullName);
+    }
+
     // Check if user has purchased this product
     const orders = JSON.parse(localStorage.getItem("orders") || "[]");
+    console.log("Checking purchase for product ID:", id);
+    console.log("User orders:", orders);
+    
     const userPurchased = orders.some(
       (order: any) =>
         order.items &&
-        order.items.some((item: any) => item.id === parseInt(id || "0"))
+        order.items.some((item: any) => {
+          const hasPurchased = item.product._id === id;
+          console.log(`Checking item ${item.product._id} against ${id}: ${hasPurchased}`);
+          return hasPurchased;
+        })
     );
+    
+    console.log("User has purchased this product:", userPurchased);
     setHasPurchased(userPurchased);
 
     // Load existing reviews for this product from all verified purchasers
-    const savedReviews = localStorage.getItem("productReviews");
-    if (savedReviews) {
-      const allReviews = JSON.parse(savedReviews);
-      const productReviews = allReviews.filter(
-        (r: Review) => r.productId === id
-      );
-      setReviews(productReviews);
+    const fetchReviews = async () => {
+      setReviewsLoading(true);
+      try {
+        const result = await getProductReviews(id!);
+        if (result.success) {
+          setReviews(result.reviews);
+        } else {
+          toast({
+            title: "Error fetching reviews",
+            description: result.error || "Failed to fetch reviews. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        toast({
+          title: "Error fetching reviews",
+          description: "An error occurred while fetching reviews. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setReviewsLoading(false);
+      }
+    };
+
+    fetchReviews();
+  }, [id, customer, toast]);
+
+  // Function to refresh reviews after submission
+  const refreshReviews = async () => {
+    try {
+      const result = await getProductReviews(id!);
+      if (result.success) {
+        setReviews(result.reviews);
+      }
+    } catch (error) {
+      console.error("Error refreshing reviews:", error);
     }
-  }, [id]);
+  };
+
+  // If not authenticated, don't render the component
+  if (!customerId) {
+    return null;
+  }
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -75,53 +146,89 @@ const Review = () => {
       return;
     }
 
+    if (!customerId) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to leave a review.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (rating === 0) {
+      toast({
+        title: "Rating Required",
+        description: "Please select a rating before submitting your review.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!review.trim()) {
+      toast({
+        title: "Review Required",
+        description: "Please write your review before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      // Convert images to base64 for API
+      const imageUrls = await Promise.all(
+        images.map(async (image) => {
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(image);
+          });
+        })
+      );
 
-    // Convert images to base64 for storage
-    const imageUrls = await Promise.all(
-      images.map(async (image) => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(image);
+      // Call the API to submit the review
+      const result = await leaveReview(customerId, id!, {
+        rating,
+        comment: review.trim(),
+        images: imageUrls,
+      });
+
+      if (result.success) {
+        // Reset form
+        setRating(0);
+        setReview("");
+        setImages([]);
+
+        // Refresh reviews to show the new review
+        await refreshReviews();
+
+        toast({
+          title: "Review Submitted",
+          description: "Thank you for your review!",
         });
-      })
-    );
 
-    const newReview: Review = {
-      id: Date.now().toString(),
-      productId: id!,
-      userName,
-      rating,
-      review,
-      images: imageUrls,
-      date: new Date().toLocaleDateString(),
-      verified: true,
-    };
-
-    // Save to localStorage
-    const savedReviews = localStorage.getItem("productReviews");
-    const allReviews = savedReviews ? JSON.parse(savedReviews) : [];
-    allReviews.push(newReview);
-    localStorage.setItem("productReviews", JSON.stringify(allReviews));
-
-    // Update local state
-    setReviews((prev) => [...prev, newReview]);
-
-    setIsSubmitting(false);
-
-    // Reset form
-    setRating(0);
-    setReview("");
-    setImages([]);
-
-    toast({
-      title: "Review Submitted",
-      description: "Thank you for your review!",
-    });
+        // Optionally redirect back to product page
+        setTimeout(() => {
+          window.location.href = `/product/${id}`;
+        }, 1500);
+      } else {
+        toast({
+          title: "Submission Failed",
+          description: result.error || "Failed to submit review. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      toast({
+        title: "Submission Failed",
+        description: "An error occurred while submitting your review. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderStars = (rating: number) => {
@@ -156,7 +263,7 @@ const Review = () => {
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <Link
-                to="/login"
+                to="/customer/login"
                 className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
               >
                 Login
@@ -329,7 +436,11 @@ const Review = () => {
               </Link>
             </div>
 
-            {reviews.length === 0 ? (
+            {reviewsLoading ? (
+              <p className="text-gray-600 dark:text-gray-400 text-center py-8">
+                Loading reviews...
+              </p>
+            ) : reviews.length === 0 ? (
               <p className="text-gray-600 dark:text-gray-400 text-center py-8">
                 No reviews yet. Be the first to review this product!
               </p>
@@ -337,7 +448,7 @@ const Review = () => {
               <div className="space-y-6 max-h-96 overflow-y-auto">
                 {reviews.slice(0, 3).map((reviewItem) => (
                   <div
-                    key={reviewItem.id}
+                    key={reviewItem._id}
                     className="border-b dark:border-gray-700 pb-6 last:border-b-0"
                   >
                     <div className="flex items-start space-x-4">

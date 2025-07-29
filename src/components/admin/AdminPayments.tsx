@@ -30,7 +30,6 @@ const AdminPayment = () => {
           status: statusFilter !== "All" ? statusFilter : undefined,
           page: currentPage,
         });
-      console.log("sessions", sessions);
       setPayments(sessions);
       setTotalPages(apiTotalPages || 1);
       setLoading(false);
