@@ -1,168 +1,273 @@
-
-import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-
-interface Order {
-  id: number;
-  customer: string;
-  total: number;
-  status: string;
-  date: string;
-  items: number;
-  customerEmail?: string;
-  customerPhone?: string;
-  shippingAddress?: string;
-  paymentMethod?: string;
-  orderItems?: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-    image?: string;
-  }>;
-}
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { X } from "lucide-react";
+import { updateOrderStatus } from "@/Api/OrderProduct";
 
 interface OrderDetailModalProps {
-  order: Order | null;
+  order: any | null;
   isOpen: boolean;
   onClose: () => void;
+  reloadOrders?: () => Promise<void>;
 }
+
+const getStatusColor = (status: string) => {
+  switch (status?.toLowerCase()) {
+    case "pending":
+      return "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100";
+    case "processing":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100";
+    case "completed":
+    case "delivered":
+      return "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100";
+    case "cancelled":
+      return "bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100";
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
+  }
+};
+
+const getPaymentStatusColor = (status: string) => {
+  switch (status?.toLowerCase()) {
+    case "confirmed":
+      return "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100";
+    case "pending":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100";
+    case "failed":
+      return "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100";
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
+  }
+};
+
+const statusOptions = [
+  { value: "processing", label: "Pending" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   order,
   isOpen,
   onClose,
+  reloadOrders,
 }) => {
+  const [status, setStatus] = useState(order?.status || "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  React.useEffect(() => {
+    setStatus(order?.status || "");
+    setError("");
+    setSuccess("");
+  }, [order]);
+
   if (!order) return null;
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pending': return 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100';
-      case 'Processing': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100';
-      case 'Completed': return 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
+  const items = order.items || [];
+  const delivery = order.deliveryDetails || {};
+  const customer = order.customerInfo || {};
+
+  const canEditStatus = !["completed", "delivered", "cancelled"].includes(
+    (order.status || "").toLowerCase()
+  );
+
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setStatus(e.target.value);
+    setError("");
+    setSuccess("");
+  };
+
+  const handleUpdateStatus = async () => {
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await updateOrderStatus(order._id, status);
+      console.log("Update response:", res);
+      setSuccess("Order status updated successfully");
+      if (reloadOrders) await reloadOrders();
+      // Optionally update order.status in parent
+    } catch (err: any) {
+      setError(err.message || "Failed to update order status");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Mock order items with images for demonstration
-  const orderItems = order.orderItems || [
-    { 
-      name: 'Digital Stethoscope Pro', 
-      quantity: 1, 
-      price: 299.99,
-      image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=300&fit=crop'
-    },
-    { 
-      name: 'Blood Glucose Test Kit', 
-      quantity: 2, 
-      price: 89.99,
-      image: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=300&fit=crop'
-    },
-  ];
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-2">
           <DialogTitle>Order Details</DialogTitle>
-        </DialogHeader>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Order & Customer Info */}
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <Separator />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+          {/* Order & Customer Info */}
           <div className="space-y-4">
-            {/* Order Info */}
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Order Information</h3>
-              <div className="space-y-2">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+                Order Info
+              </h3>
+              <div className="space-y-1 text-sm">
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Order ID</p>
-                  <p className="font-mono">#{order.id}</p>
+                  Order ID: <span className="font-mono">#{order._id}</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  Status:{" "}
+                  <Badge className={getStatusColor(status)}>{status}</Badge>
+                  {canEditStatus && (
+                    <>
+                      <select
+                        value={status}
+                        onChange={handleStatusChange}
+                        className="ml-2 border rounded px-2 py-1 text-xs"
+                        disabled={loading}
+                      >
+                        {statusOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleUpdateStatus}
+                        disabled={loading || status === order.status}
+                        className="ml-2 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {loading ? "Updating..." : "Update"}
+                      </button>
+                    </>
+                  )}
+                </div>
+                {error && (
+                  <div className="text-xs text-red-600 mt-1">{error}</div>
+                )}
+                {success && (
+                  <div className="text-xs text-green-600 mt-1">{success}</div>
+                )}
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
-                  <Badge className={getStatusColor(order.status)}>
-                    {order.status}
+                  Payment:{" "}
+                  <Badge className={getPaymentStatusColor(order.paymentStatus)}>
+                    {order.paymentStatus}
                   </Badge>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Date</p>
-                  <p>{order.date}</p>
+                  Date:{" "}
+                  {order.createdAt
+                    ? new Date(order.createdAt).toLocaleString()
+                    : "-"}
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
-                  <p className="text-lg font-semibold">₦{order.total.toLocaleString()}</p>
+                  Total:{" "}
+                  <span className="font-semibold">
+                    ₦{order.totalAmount?.toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  Shipping Fee:{" "}
+                  <span className="font-semibold">
+                    ₦{order.shippingFee?.toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
-
             <Separator />
-
-            {/* Customer Info */}
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Customer</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Name</p>
-                  <p>{order.customer}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
-                  <p>{order.customerEmail || 'john.doe@email.com'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Phone</p>
-                  <p>{order.customerPhone || '+234 801 234 5678'}</p>
-                </div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+                Customer
+              </h3>
+              <div className="space-y-1 text-sm">
+                <div>Name: {customer.fullName}</div>
+                <div>Email: {customer.email}</div>
+                <div>Phone: {customer.phone}</div>
+                <div>Address: {customer.address}</div>
+                <div>City: {customer.city}</div>
+                <div>State: {customer.state}</div>
+                <div>Zip: {customer.zipCode}</div>
+              </div>
+            </div>
+            <Separator />
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+                Delivery
+              </h3>
+              <div className="space-y-1 text-sm">
+                <div>Name: {delivery.fullName}</div>
+                <div>Phone: {delivery.phone}</div>
+                <div>Address: {delivery.address}</div>
+                <div>City: {delivery.city}</div>
+                <div>State: {delivery.state}</div>
+                <div>Zip: {delivery.zipCode}</div>
+                <div>Landmark: {delivery.landmark}</div>
+                <div>Instructions: {delivery.deliveryInstructions}</div>
               </div>
             </div>
           </div>
 
-          {/* Middle Column - Order Items with Images */}
+          {/* Items Table */}
+          <div className="md:col-span-2">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Order Items
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border rounded-lg">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Product</th>
+                    <th className="px-3 py-2 text-left">Brand</th>
+                    <th className="px-3 py-2 text-right">Qty</th>
+                    <th className="px-3 py-2 text-right">Price</th>
+                    <th className="px-3 py-2 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item: any, idx: number) => (
+                    <tr key={idx} className="border-b dark:border-gray-700">
+                      <td className="px-3 py-2">
+                        {item.product?.productName || "-"}
+                        <div className="text-xs text-gray-500">
+                          {item.product?.category}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">{item.brandName}</td>
+                      <td className="px-3 py-2 text-right">{item.quantity}</td>
+                      <td className="px-3 py-2 text-right">
+                        ₦{item.price?.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        ₦{(item.price * item.quantity)?.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <Separator className="my-4" />
+        <div className="flex flex-col md:flex-row justify-between text-xs text-gray-500">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Order Items</h3>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {orderItems.map((item, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <img 
-                    src={item.image} 
-                    alt={item.name}
-                    className="w-16 h-16 object-cover rounded-lg"
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{item.name}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Qty: {item.quantity}</p>
-                    <p className="font-semibold text-sm">₦{(item.price * item.quantity).toLocaleString()}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            Created:{" "}
+            {order.createdAt ? new Date(order.createdAt).toLocaleString() : "-"}
           </div>
-
-          {/* Right Column - Shipping & Payment */}
-          <div className="space-y-4">
-            {/* Shipping Address */}
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Shipping Address</h3>
-              <p className="text-sm">{order.shippingAddress || '123 Lagos Street, Victoria Island, Lagos State, Nigeria'}</p>
-            </div>
-
-            <Separator />
-
-            {/* Payment Info */}
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Payment</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Method</p>
-                  <p>{order.paymentMethod || 'Bank Transfer'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
-                  <p className="font-semibold">₦{order.total.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
+          <div>
+            Updated:{" "}
+            {order.updatedAt ? new Date(order.updatedAt).toLocaleString() : "-"}
           </div>
         </div>
       </DialogContent>

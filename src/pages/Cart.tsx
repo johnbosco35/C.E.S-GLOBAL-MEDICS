@@ -1,10 +1,22 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, Trash2, Plus, Minus, ShoppingCart } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Trash2,
+  Plus,
+  Minus,
+  ShoppingCart,
+  AlertCircle,
+} from "lucide-react";
 import { useCart } from "../contexts/CartContext";
 import { useTheme } from "../contexts/ThemeContext";
 import ThemeToggle from "../components/ThemeToggle";
 import { motion } from "framer-motion";
+import { LazyLoadImage } from "react-lazy-load-image-component";
+import "react-lazy-load-image-component/src/effects/blur.css";
+import { createCheckoutSession } from "@/Api/CheckOutApi";
+import { useSelector } from "react-redux";
+import { RootState } from "@/redux/store";
 
 const Cart = () => {
   const {
@@ -13,13 +25,52 @@ const Cart = () => {
     removeFromCart,
     getTotalPrice,
     getTotalItems,
+    loading,
+    operationLoading,
+    error,
+    clearError,
   } = useCart();
+
+  console.log(loading);
+
   const { theme } = useTheme();
+  const navigate = useNavigate();
+
+  // Fallback: use Redux customer first, or localStorage second
+  const customer = useSelector((state: RootState) => state.customer.customer);
+  const customerId = customer?._id || localStorage.getItem("customerId");
+  const sessionId = useSelector((state: RootState) => state?.cart.sessionId);
+
+  console.log(customerId);
+
+  console.log("Session ID:", sessionId);
 
   const subtotal = getTotalPrice();
-  const shipping = subtotal > 0 ? 1500 : 0;
-  const tax = subtotal * 0.08;
-  const total = subtotal + shipping + tax;
+  // const shipping = subtotal > 0 ? 1500 : 0;
+  // const tax = subtotal * 0.08;
+  const total = subtotal;
+
+  const handleProceedToCheckout = async () => {
+    if (cartItems.length === 0) {
+      alert("Cart is empty!");
+      return;
+    }
+
+    if (customerId === undefined || sessionId === undefined) {
+      // alert("Missing customer session.");
+      navigate("/customer/register");
+      return;
+    }
+
+    try {
+      const sessionData = await createCheckoutSession(customerId, sessionId);
+      console.log(sessionData);
+      window.location.href = "/checkout";
+    } catch (error) {
+      console.error("Checkout session creation failed:", error);
+      alert("Failed to create checkout session");
+    }
+  };
 
   return (
     <div
@@ -65,7 +116,31 @@ const Cart = () => {
           Shopping Cart
         </h1>
 
-        {cartItems.length === 0 ? (
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
+                <span className="text-red-800 dark:text-red-200">
+                  {error.message}
+                </span>
+              </div>
+              <button
+                onClick={clearError}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-20 text-lg text-gray-500 dark:text-gray-300">
+            Loading your cart...
+          </div>
+        ) : cartItems.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-xl text-gray-600 dark:text-gray-400 mb-4">
               Your cart is empty
@@ -86,21 +161,12 @@ const Cart = () => {
                   key={`${item.id}-${item.brand}`}
                   className="flex items-start p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 >
-                  <img
+                  <LazyLoadImage
                     src={item.image}
                     alt={item.name}
+                    effect="blur"
                     className="w-24 h-24 object-cover rounded-md mr-4"
                   />
-                  {/* <div className="grid grid-cols-3 gap-1 w-24">
-                    {item.images?.slice(0, 3).map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt={`${item.name} ${i + 1}`}
-                        className="w-full h-16 object-cover rounded-md"
-                      />
-                    ))}
-                  </div> */}
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {item.name}
@@ -119,7 +185,12 @@ const Cart = () => {
                         onClick={() =>
                           updateQuantity(item.id, item.brand, item.quantity - 1)
                         }
-                        className="px-2 py-1 text-gray-700 dark:text-gray-300"
+                        disabled={
+                          operationLoading?.type === "UPDATE" &&
+                          operationLoading?.itemId === item.id &&
+                          operationLoading?.brand === item.brand
+                        }
+                        className="px-2 py-1 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Minus className="w-4 h-4" />
                       </motion.button>
@@ -131,7 +202,12 @@ const Cart = () => {
                         onClick={() =>
                           updateQuantity(item.id, item.brand, item.quantity + 1)
                         }
-                        className="px-2 py-1 text-gray-700 dark:text-gray-300"
+                        disabled={
+                          operationLoading?.type === "UPDATE" &&
+                          operationLoading?.itemId === item.id &&
+                          operationLoading?.brand === item.brand
+                        }
+                        className="px-2 py-1 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="w-4 h-4" />
                       </motion.button>
@@ -139,7 +215,12 @@ const Cart = () => {
                     <motion.button
                       whileTap={{ scale: 0.9 }}
                       onClick={() => removeFromCart(item.id, item.brand)}
-                      className="text-red-600 dark:text-red-400 hover:underline text-sm"
+                      disabled={
+                        operationLoading?.type === "REMOVE" &&
+                        operationLoading?.itemId === item.id &&
+                        operationLoading?.brand === item.brand
+                      }
+                      className="text-red-600 dark:text-red-400 hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 className="w-5 h-5" />
                     </motion.button>
@@ -163,7 +244,7 @@ const Cart = () => {
                     ₦{subtotal.toLocaleString()}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                {/* <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">
                     Shipping
                   </span>
@@ -178,7 +259,7 @@ const Cart = () => {
                   <span className="font-semibold dark:text-white">
                     ₦{tax.toLocaleString()}
                   </span>
-                </div>
+                </div> */}
               </div>
 
               <div className="border-t pt-3 mt-3 border-gray-200 dark:border-gray-700">
@@ -192,12 +273,16 @@ const Cart = () => {
                 </div>
               </div>
 
-              <Link
-                to="/checkout"
-                className="mt-6 block bg-blue-600 text-white py-3 rounded-md text-center font-semibold hover:bg-blue-700 transition"
+              <button
+                onClick={handleProceedToCheckout}
+                disabled={operationLoading?.type === "CLEAR"}
+                className="mt-6 w-full bg-blue-600 text-white py-3 rounded-md text-center font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Proceed to Checkout
-              </Link>
+                {operationLoading?.type === "CLEAR"
+                  ? "Processing..."
+                  : "Proceed to Checkout"}
+              </button>
+
               <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
                 Secure checkout powered by CES Medics
               </p>

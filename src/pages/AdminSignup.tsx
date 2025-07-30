@@ -8,9 +8,15 @@ import {
   User,
   ShieldCheck,
   PhoneCall,
-  Loader,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { adminRegister } from "@/Api/AdminAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { motion } from "framer-motion";
 
 type FormData = {
   fullName: string;
@@ -21,7 +27,6 @@ type FormData = {
 };
 
 const AdminSignup = () => {
-  // State variables
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -35,104 +40,107 @@ const AdminSignup = () => {
   });
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const { fullName, email, phoneNumber, password, confirmPassword } =
-      formData;
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (error) setError("");
+  };
 
-    if (!fullName || !email || !phoneNumber) {
-      setError("Please fill in all required fields");
-      return;
+  const validateForm = () => {
+    const { fullName, email, phoneNumber, password, confirmPassword } = formData;
+
+    if (!fullName.trim()) {
+      setError("Full name is required");
+      return false;
     }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
+    if (!email.trim()) {
+      setError("Email is required");
+      return false;
+    }
+
+    if (!phoneNumber.trim()) {
+      setError("Phone number is required");
+      return false;
+    }
+
+    if (!password.trim()) {
+      setError("Password is required");
+      return false;
+    }
+
+    if (!confirmPassword.trim()) {
+      setError("Please confirm your password");
+      return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setError("Please enter a valid email address");
+      return false;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return false;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
+    setError("");
 
-    adminRegister({
-      fullName,
-      email,
-      password,
-      confirmPassword,
-      phoneNumber,
-    })
-      .then((response) => {
-        console.log("Admin account created:", response);
-        setLoading(false);
-        setError("");
-        navigate("/admin/login");
-      })
-      .catch((err) => {
-        console.error(
-          "Error creating admin account:",
-          err.response.data.message
-        );
-        err.response.status === 400
-          ? setError(err.response.data.message + " Not Allowed")
-          : setError("Failed to create admin account. Please try again.");
-        setLoading(false);
+    try {
+      const response = await adminRegister({
+        fullName: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        phoneNumber: formData.phoneNumber,
       });
+
+      console.log("Admin account created:", response);
+      navigate("/admin/login");
+    } catch (err: any) {
+      console.error("Error creating admin account:", err);
+      setError(
+        err?.response?.data?.message || "Failed to create admin account. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
-
-  // const handleSubmit = (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   setError("");
-
-  //   // Validate passwords match
-  //   if (formData.password !== formData.confirmPassword) {
-  //     setError("Passwords do not match");
-  //     return;
-  //   }
-
-  //   // Get existing admin accounts
-  //   const adminAccounts = JSON.parse(
-  //     localStorage.getItem("adminAccounts") || "[]"
-  //   );
-
-  //   // Check if email already exists
-  //   const existingAdmin = adminAccounts.find(
-  //     (account: any) => account.email === formData.email
-  //   );
-  //   if (existingAdmin) {
-  //     setError("Admin account with this email already exists");
-  //     return;
-  //   }
-
-  //   // Create new admin account
-  //   const newAdmin = {
-  //     id: Date.now(),
-  //     name: formData.name,
-  //     email: formData.email,
-  //     phoneNumber: formData.phoneNumber,
-  //     password: formData.password,
-  //     createdAt: new Date().toISOString(),
-  //   };
-
-  //   // Save to localStorage
-  //   adminAccounts.push(newAdmin);
-  //   localStorage.setItem("adminAccounts", JSON.stringify(adminAccounts));
-
-  //   console.log("Admin account created:", newAdmin.email);
-  //   navigate("/admin/login");
-  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="bg-white rounded-lg shadow-md p-8">
+      <motion.div 
+        className="max-w-md w-full space-y-8"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="bg-white rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
-            <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+            <motion.div 
+              className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4"
+              whileHover={{ scale: 1.05 }}
+              transition={{ duration: 0.2 }}
+            >
               <ShieldCheck className="w-8 h-8 text-blue-600" />
-            </div>
+            </motion.div>
             <h2 className="text-2xl font-semibold text-gray-900">
               Create Admin Account
             </h2>
@@ -140,101 +148,85 @@ const AdminSignup = () => {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-              {error}
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            </motion.div>
           )}
 
           <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Full Name
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  id="name"
+                <Input
+                  id="fullName"
                   type="text"
                   value={formData.fullName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullName: e.target.value })
-                  }
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  onChange={(e) => handleInputChange("fullName", e.target.value)}
+                  className="pl-10"
                   placeholder="Enter your full name"
+                  disabled={loading}
                 />
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Email Address
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
+                <Input
                   id="email"
-                  // type="email"
+                  type="email"
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  className="pl-10"
                   placeholder="Enter admin email"
+                  disabled={loading}
                 />
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="phoneNumber"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Phone Number
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
               <div className="relative">
                 <PhoneCall className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
+                <Input
                   id="phoneNumber"
                   type="tel"
                   value={formData.phoneNumber}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phoneNumber: e.target.value })
-                  }
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
+                  className="pl-10"
                   placeholder="Enter your phone number"
+                  disabled={loading}
                 />
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Password
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
+                <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  className="pl-10 pr-10"
                   placeholder="Create a password"
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -245,32 +237,24 @@ const AdminSignup = () => {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Confirm Password
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
+                <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   value={formData.confirmPassword}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                  className="pl-10 pr-10"
                   placeholder="Confirm your password"
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={loading}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -281,39 +265,43 @@ const AdminSignup = () => {
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-semibold border-none"
+              className="w-full"
+              disabled={loading}
             >
               {loading ? (
-                <span className="flex items-center justify-center">
-                  <Loader className="animate-spin mr-2" />
-                  Creating...
-                </span>
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating Account...
+                </>
               ) : (
-                "Create Account"
+                "Create Admin Account"
               )}
-            </button>
+            </Button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
             <p className="text-sm text-gray-600">
               Already have an admin account?{" "}
               <Link
                 to="/admin/login"
-                className="text-blue-600 hover:text-blue-800 font-semibold"
+                className="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
               >
-                Sign in here
+                Login here
               </Link>
             </p>
-            <p className="text-sm text-gray-600 mt-2">
-              <Link to="/" className="text-blue-600 hover:text-blue-800">
+            <p className="text-sm text-gray-600">
+              <Link 
+                to="/" 
+                className="text-blue-600 hover:text-blue-800 transition-colors"
+              >
                 Back to Store
               </Link>
             </p>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
